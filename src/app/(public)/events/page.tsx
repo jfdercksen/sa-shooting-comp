@@ -19,18 +19,19 @@ export default async function EventsPage() {
     .order('display_order', { ascending: true })
 
   // Fetch competition disciplines with discipline details
-  const { data: competitionDisciplines } = await supabase
+  const { data: competitionDisciplinesRaw } = await supabase
     .from('competition_disciplines')
     .select(`
       competition_id,
       discipline_id,
-      disciplines (
-        id,
-        name,
-        color,
-        slug
-      )
+      disciplines (*)
     `)
+  
+  // Filter out null values and ensure required fields are present
+  const competitionDisciplines = (competitionDisciplinesRaw || []).filter(
+    (cd): cd is NonNullable<typeof cd> & { competition_id: string; discipline_id: string } => 
+      cd !== null && cd.competition_id !== null && cd.discipline_id !== null
+  )
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -45,7 +46,7 @@ export default async function EventsPage() {
         <EventsCalendar
           competitions={competitions || []}
           disciplines={disciplines || []}
-          competitionDisciplines={competitionDisciplines || []}
+          competitionDisciplines={competitionDisciplines}
         />
       </div>
     </div>

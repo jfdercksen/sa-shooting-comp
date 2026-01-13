@@ -296,13 +296,13 @@ export default function AdminDisciplinesPage() {
                   <div className="flex items-center gap-2">
                     <input
                       type="color"
-                      value={formData.color}
+                      value={formData.color || '#000000'}
                       onChange={(e) => setFormData({ ...formData, color: e.target.value })}
                       className="h-10 w-20 border border-gray-300 rounded cursor-pointer"
                     />
                     <input
                       type="text"
-                      value={formData.color}
+                      value={formData.color || '#000000'}
                       onChange={(e) => setFormData({ ...formData, color: e.target.value })}
                       className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
                       placeholder="#1e40af"
@@ -316,7 +316,7 @@ export default function AdminDisciplinesPage() {
                   </label>
                   <input
                     type="number"
-                    value={formData.display_order}
+                    value={formData.display_order ?? 0}
                     onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) || 0 })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
                   />
@@ -326,7 +326,7 @@ export default function AdminDisciplinesPage() {
                   <input
                     type="checkbox"
                     id="is_active"
-                    checked={formData.is_active}
+                    checked={formData.is_active ?? false}
                     onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                     className="h-4 w-4 text-[#1e40af] focus:ring-[#1e40af] border-gray-300 rounded"
                   />
@@ -352,7 +352,7 @@ export default function AdminDisciplinesPage() {
                   Equipment Requirements
                 </label>
                 <textarea
-                  value={formData.equipment_requirements}
+                  value={formData.equipment_requirements || ''}
                   onChange={(e) => setFormData({ ...formData, equipment_requirements: e.target.value })}
                   rows={4}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
@@ -365,7 +365,7 @@ export default function AdminDisciplinesPage() {
                   Rules Summary
                 </label>
                 <textarea
-                  value={formData.rules_summary}
+                  value={formData.rules_summary || ''}
                   onChange={(e) => setFormData({ ...formData, rules_summary: e.target.value })}
                   rows={4}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"

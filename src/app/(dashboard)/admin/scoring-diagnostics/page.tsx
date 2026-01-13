@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { CheckCircle, XCircle, AlertCircle, RefreshCw, Database, Users, Target, Trophy } from 'lucide-react'
+import { CheckCircle, XCircle, AlertCircle, RefreshCw, Database as DatabaseIcon, Users, Target, Trophy } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Database } from '@/types/database'
 
@@ -192,7 +192,7 @@ export default function ScoringDiagnosticsPage() {
           {/* 1. Database Tables Check */}
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-              <Database className="h-6 w-6 mr-2 text-[#1e40af]" />
+              <DatabaseIcon className="h-6 w-6 mr-2 text-[#1e40af]" />
               1. Database Tables
             </h2>
             <div className="space-y-3">

@@ -137,15 +137,16 @@ async function checkScoringSystem() {
     console.log('\n3️⃣  CHECKING USER REGISTRATIONS\n')
     
     // Get all users
-    const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers()
+    const { data: usersData, error: usersError } = await supabase.auth.admin.listUsers()
+    const users = usersData?.users || []
     
     if (usersError) {
       console.error('❌ Error fetching users:', usersError.message)
-    } else if (users && users.users && users.users.length > 0) {
-      console.log(`Found ${users.users.length} users. Checking registrations...\n`)
+    } else if (users.length > 0) {
+      console.log(`Found ${users.length} users. Checking registrations...\n`)
       
       // Check registrations for first 10 users
-      const usersToCheck = users.users.slice(0, 10)
+      const usersToCheck = users.slice(0, 10)
       
       for (const user of usersToCheck) {
         const { data: userRegs, error: userRegError } = await supabase
@@ -170,8 +171,8 @@ async function checkScoringSystem() {
         }
       }
       
-      if (users.users && users.users.length > 10) {
-        console.log(`\n... and ${users.users.length - 10} more users`)
+      if (users.length > 10) {
+        console.log(`\n... and ${users.length - 10} more users`)
       }
     } else {
       console.log('⚠️  No users found')

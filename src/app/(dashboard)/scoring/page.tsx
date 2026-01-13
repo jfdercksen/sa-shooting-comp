@@ -314,13 +314,13 @@ export default function ScoringPage() {
       if (!reg) throw new Error('Registration not found')
 
       // If stageId is provided, submit only that stage, otherwise submit all stages
-      const stagesToSubmit = stageId 
-        ? [[stageId, stageScores[stageId]]].filter(([_, score]) => score)
-        : Object.entries(stageScores)
+      const stagesToSubmit: Array<[string, StageScore]> = stageId 
+        ? (stageScores[stageId] ? [[stageId, stageScores[stageId]] as [string, StageScore]] : [])
+        : Object.entries(stageScores).filter((entry): entry is [string, StageScore] => !!entry[1])
 
       // Submit each stage score
       for (const [sid, stageScore] of stagesToSubmit) {
-        if (!stageScore) continue
+        if (!stageScore || typeof stageScore === 'string') continue
 
         // Check if score already exists for this stage
         const existingScore = submittedScores.find(
@@ -572,7 +572,7 @@ export default function ScoringPage() {
               const existingScore = submittedScores.find(
                 (s: any) => s.registration_id === selectedRegistration && s.stage_id === stage.id
               )
-              const isVerified = existingScore?.verified_at
+              const isVerified = !!existingScore?.verified_at
               const isPending = existingScore && !existingScore.verified_at
 
               const stageScore = stageScores[stage.id] || {
@@ -660,7 +660,7 @@ export default function ScoringPage() {
                         <label className="flex items-center">
                           <input
                             type="checkbox"
-                            checked={stageScore.isDQ}
+                            checked={stageScore.isDQ ?? false}
                             onChange={(e) => {
                               setStageScores({
                                 ...stageScores,

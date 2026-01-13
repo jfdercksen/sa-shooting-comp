@@ -95,7 +95,7 @@ export default function TeamsPage() {
       const { data: teamsData, error: teamsDataError } = await supabase
         .from('teams')
         .select('*')
-        .in('id', allTeamIds)
+        .in('id', allTeamIds.filter((id): id is string => id !== null))
 
       console.log('Teams data:', teamsData)
       console.log('Teams data error:', teamsDataError)

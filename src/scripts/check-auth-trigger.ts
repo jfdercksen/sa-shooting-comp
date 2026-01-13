@@ -53,23 +53,24 @@ async function checkAuthTrigger() {
 
     // Check for users without profiles
     console.log('\n📋 Step 2: Checking for users without profiles...')
-    const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers()
+    const { data: usersData, error: usersError } = await supabase.auth.admin.listUsers()
     
     if (usersError) {
       console.error('  ❌ Cannot list users:', usersError.message)
       return
     } else {
-      console.log(`  ✓ Found ${users?.users?.length || 0} auth users`)
+      const users = usersData?.users || []
+      console.log(`  ✓ Found ${users.length} auth users`)
       
-      if (users?.users && users.users.length > 0) {
-        const userIds = users.users.map(u => u.id)
+      if (users.length > 0) {
+        const userIds = users.map(u => u.id)
         const { data: existingProfiles } = await supabase
           .from('profiles')
           .select('id')
           .in('id', userIds)
 
         const profileIds = new Set(existingProfiles?.map(p => p.id) || [])
-        const missingProfiles = users.users.filter(u => !profileIds.has(u.id))
+        const missingProfiles = users.filter(u => !profileIds.has(u.id))
 
         if (missingProfiles.length > 0) {
           console.log(`\n  ⚠️  Found ${missingProfiles.length} users without profiles:`)
@@ -89,10 +90,11 @@ async function checkAuthTrigger() {
 
     // Test: Check recent users
     console.log('\n📋 Step 3: Checking recent user registrations...')
-    const { data: { users: recentUsers } } = await supabase.auth.admin.listUsers()
+    const { data: recentUsersData } = await supabase.auth.admin.listUsers()
+    const recentUsers = recentUsersData?.users || []
     
-    if (recentUsers?.users && recentUsers.users.length > 0) {
-      const recentUser = recentUsers.users[0]
+    if (recentUsers.length > 0) {
+      const recentUser = recentUsers[0]
       const { data: profile } = await supabase
         .from('profiles')
         .select('*')

@@ -71,10 +71,8 @@ export default function RegisterPage() {
   // Save draft to localStorage (excluding password for security)
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      const draftData = { ...watchedValues }
+      const { password, confirmPassword, ...draftData } = watchedValues
       // Don't save passwords to localStorage for security
-      delete draftData.password
-      delete draftData.confirmPassword
       localStorage.setItem(STORAGE_KEY, JSON.stringify(draftData))
     }, 500)
     return () => clearTimeout(timeoutId)

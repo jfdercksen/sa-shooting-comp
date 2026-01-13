@@ -6,7 +6,7 @@ export const registrationSchema = z.object({
   full_names: z.string().min(2, 'Full names are required'),
   surname: z.string().min(2, 'Surname is required'),
   gender: z.enum(['Male', 'Female'], {
-    required_error: 'Gender is required',
+    message: 'Gender is required',
   }),
   sa_citizen: z.boolean(),
   rsa_id_number: z.string().length(13, 'RSA ID must be exactly 13 digits').regex(/^\d+$/, 'RSA ID must contain only numbers'),
@@ -34,12 +34,13 @@ export const registrationSchema = z.object({
 
   // Step 3 - Shooting Details
   shoulder_preference: z.enum(['left', 'right'], {
-    required_error: 'Shoulder preference is required',
+    message: 'Shoulder preference is required',
   }),
   first_sa_championships: z.boolean(),
   // Role is restricted - only 'shooter', 'range_officer', and 'stats_officer' can be self-selected
   // 'team_captain', 'admin', and 'super_admin' must be assigned by administrators
-  role: z.enum(['shooter', 'range_officer', 'stats_officer']).default('shooter'),
+  // Required field with default value - always provided in defaultValues
+  role: z.enum(['shooter', 'range_officer', 'stats_officer']),
 })
 
 export const registrationSchemaWithConfirm = registrationSchema.refine(

@@ -155,8 +155,9 @@ export default function ResultsPage() {
     setLoading(true)
 
     try {
-      // Try to use team_leaderboard view first
-      let query = supabase
+      // Try to use team_leaderboard view first (if it exists)
+      // Note: Views may not be in TypeScript types, so we use 'any' type assertion
+      let query = (supabase as any)
         .from('team_leaderboard')
         .select('*')
         .eq('competition_id', selectedCompetition)
@@ -349,8 +350,9 @@ export default function ResultsPage() {
     setLoading(true)
 
     try {
-      // Try to use competition_leaderboard view first
-      const { data: leaderboardData, error: viewError } = await supabase
+      // Try to use competition_leaderboard view first (if it exists)
+      // Note: Views may not be in TypeScript types, so we use 'any' type assertion
+      const { data: leaderboardData, error: viewError } = await (supabase as any)
         .from('competition_leaderboard')
         .select('*')
         .eq('competition_id', selectedCompetition)

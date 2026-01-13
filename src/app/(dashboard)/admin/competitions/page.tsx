@@ -519,7 +519,7 @@ export default function AdminCompetitionsPage() {
       })
 
       // Populate disciplines
-      const disciplineIds = compDisciplines?.map(cd => cd.discipline_id) || []
+      const disciplineIds = compDisciplines?.map(cd => cd.discipline_id).filter((id): id is string => id !== null) || []
       setSelectedDisciplines(disciplineIds)
 
       // Populate discipline fees
@@ -1346,7 +1346,7 @@ export default function AdminCompetitionsPage() {
                     <input
                       type="checkbox"
                       id="is_featured"
-                      checked={formData.is_featured}
+                      checked={formData.is_featured ?? false}
                       onChange={(e) => setFormData({ ...formData, is_featured: e.target.checked })}
                       className="h-4 w-4 text-[#1e40af] focus:ring-[#1e40af] border-gray-300 rounded"
                     />

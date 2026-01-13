@@ -3,15 +3,9 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { User } from '@supabase/supabase-js'
+import type { Database } from '@/types/database'
 
-interface Profile {
-  id: string
-  email: string
-  full_names: string
-  surname: string
-  role: string
-  sabu_number: string
-}
+type Profile = Database['public']['Tables']['profiles']['Row']
 
 export default function DebugPage() {
   const [user, setUser] = useState<User | null>(null)

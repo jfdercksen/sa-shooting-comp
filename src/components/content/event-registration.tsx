@@ -70,7 +70,7 @@ export default function EventRegistration({ competition, disciplines, matches }:
             .select('team_id')
             .eq('user_id', authUser.id)
 
-          const memberTeamIds = teamMemberships?.map(tm => tm.team_id) || []
+          const memberTeamIds = teamMemberships?.map(tm => tm.team_id).filter((id): id is string => id !== null) || []
 
           // Get teams where user is captain
           const { data: captainTeams } = await supabase
@@ -78,8 +78,8 @@ export default function EventRegistration({ competition, disciplines, matches }:
             .select('*')
             .eq('captain_id', authUser.id)
 
-          const captainTeamIds = captainTeams?.map(t => t.id) || []
-          const allTeamIds = [...new Set([...memberTeamIds, ...captainTeamIds])]
+          const captainTeamIds = captainTeams?.map(t => t.id).filter((id): id is string => id !== null) || []
+          const allTeamIds: string[] = [...new Set([...memberTeamIds, ...captainTeamIds])]
 
           if (allTeamIds.length > 0) {
             const { data: teamsData } = await supabase
@@ -388,6 +388,7 @@ export default function EventRegistration({ competition, disciplines, matches }:
                       disciplineId: '',
                       selectedMatches: [],
                       allMatches: false,
+                      entryType: 'individual',
                       teamId: '',
                       requiresImportPermit: false,
                       permitApplicationBy: '',

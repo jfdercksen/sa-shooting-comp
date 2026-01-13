@@ -146,7 +146,7 @@ async function fixCommonIssues() {
 
     for (const table of tables) {
       try {
-        const { error } = await supabase.from(table).select('id').limit(1)
+        const { error } = await (supabase.from(table as any) as any).select('id').limit(1)
         if (error) {
           inaccessibleTables.push(table)
           console.error(`  ❌ ${table}: ${error.message}`)

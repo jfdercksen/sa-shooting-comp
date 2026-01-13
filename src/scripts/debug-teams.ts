@@ -104,10 +104,15 @@ async function debugTeams() {
     console.log('─'.repeat(50))
     
     // Get all policies for teams table
-    const { data: teamsPolicies, error: teamsPoliciesError } = await supabase.rpc(
-      'get_table_policies',
-      { table_name: 'teams' }
-    ).catch(() => ({ data: null, error: { message: 'Function not available' } }))
+    let teamsPolicies: any = null
+    let teamsPoliciesError: any = null
+    try {
+      const result = await supabase.rpc('get_table_policies', { table_name: 'teams' })
+      teamsPolicies = result.data
+      teamsPoliciesError = result.error
+    } catch (err) {
+      teamsPoliciesError = { message: 'Function not available' }
+    }
 
     if (teamsPoliciesError) {
       console.log('Note: Cannot query RLS policies directly via RPC')

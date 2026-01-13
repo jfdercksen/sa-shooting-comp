@@ -99,15 +99,15 @@ export default function DashboardPage() {
         .select('team_id')
         .eq('user_id', user.id)
 
-      const teamIds = teamMemberships?.map(tm => tm.team_id) || []
+      const teamIds = teamMemberships?.map(tm => tm.team_id).filter((id): id is string => id !== null) || []
 
       const { data: captainTeams } = await supabase
         .from('teams')
         .select('*')
         .eq('captain_id', user.id)
 
-      const captainTeamIds = captainTeams?.map(t => t.id) || []
-      const allTeamIds = [...new Set([...teamIds, ...captainTeamIds])]
+      const captainTeamIds = captainTeams?.map(t => t.id).filter((id): id is string => id !== null) || []
+      const allTeamIds: string[] = [...new Set([...teamIds, ...captainTeamIds])]
 
       if (allTeamIds.length > 0) {
         const { data: teamsData } = await supabase
