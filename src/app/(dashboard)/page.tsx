@@ -40,31 +40,80 @@ export default function DashboardPage() {
   }, [])
 
   async function loadDashboardData() {
+    console.log('[DashboardPage] Starting to load...')
+    const startTime = Date.now()
     setLoading(true)
     try {
+      console.log('[DashboardPage] Getting user...')
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
+        console.log('[DashboardPage] No user found')
         toast.error('Please log in')
         return
       }
+      console.log(`[DashboardPage] User found: ${user.id}`)
 
-      // Load profile
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
+      console.log('[DashboardPage] About to fetch data in parallel...')
+      // Run queries in parallel for better performance
+      const [
+        profileResult,
+        registrationsResult,
+        scoresResult,
+        teamMembershipsResult,
+        captainTeamsResult,
+        notificationsResult,
+      ] = await Promise.all([
+        // Load profile
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single(),
+        
+        // Load upcoming competitions where user is registered
+        supabase
+          .from('registrations')
+          .select('*, competitions(*)')
+          .eq('user_id', user.id)
+          .order('competitions(start_date)', { ascending: true }),
+        
+        // Load recent scores (last 5)
+        supabase
+          .from('scores')
+          .select('*, registrations!inner(*, competitions(*), disciplines(*))')
+          .eq('registrations.user_id', user.id)
+          .order('submitted_at', { ascending: false })
+          .limit(5),
+        
+        // Load team memberships
+        supabase
+          .from('team_members')
+          .select('team_id')
+          .eq('user_id', user.id),
+        
+        // Load teams where user is captain
+        supabase
+          .from('teams')
+          .select('*')
+          .eq('captain_id', user.id),
+        
+        // Load unread notifications
+        supabase
+          .from('notifications')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('is_read', false)
+          .order('created_at', { ascending: false })
+          .limit(5),
+      ])
 
+      console.log('[DashboardPage] Data fetched, processing results...')
+      
+      const profileData = profileResult.data
       setProfile(profileData)
 
-      // Load upcoming competitions where user is registered
-      const { data: registrations } = await supabase
-        .from('registrations')
-        .select('*, competitions(*)')
-        .eq('user_id', user.id)
-        .order('competitions(start_date)', { ascending: true })
-
-      const upcoming = (registrations || [])
+      const registrations = registrationsResult.data || []
+      const upcoming = registrations
         .filter((reg: any) => {
           const comp = reg.competitions
           return comp && new Date(comp.start_date) >= new Date()
@@ -74,39 +123,21 @@ export default function DashboardPage() {
           ...reg.competitions,
           registration: reg,
         }))
-
       setUpcomingCompetitions(upcoming)
 
-      // Load recent scores (last 5)
-      const { data: scoresData } = await supabase
-        .from('scores')
-        .select('*, registrations!inner(*, competitions(*), disciplines(*))')
-        .eq('registrations.user_id', user.id)
-        .order('submitted_at', { ascending: false })
-        .limit(5)
-
-      const recent = (scoresData || []).map((score: any) => ({
+      const scoresData = scoresResult.data || []
+      const recent = scoresData.map((score: any) => ({
         ...score,
         competition: score.registrations?.competitions || null,
         discipline: score.registrations?.disciplines || null,
       }))
-
       setRecentScores(recent)
 
-      // Load teams
-      const { data: teamMemberships } = await supabase
-        .from('team_members')
-        .select('team_id')
-        .eq('user_id', user.id)
+      const teamMemberships = teamMembershipsResult.data || []
+      const teamIds = teamMemberships.map(tm => tm.team_id).filter((id): id is string => id !== null)
 
-      const teamIds = teamMemberships?.map(tm => tm.team_id).filter((id): id is string => id !== null) || []
-
-      const { data: captainTeams } = await supabase
-        .from('teams')
-        .select('*')
-        .eq('captain_id', user.id)
-
-      const captainTeamIds = captainTeams?.map(t => t.id).filter((id): id is string => id !== null) || []
+      const captainTeams = captainTeamsResult.data || []
+      const captainTeamIds = captainTeams.map(t => t.id).filter((id): id is string => id !== null)
       const allTeamIds: string[] = [...new Set([...teamIds, ...captainTeamIds])]
 
       if (allTeamIds.length > 0) {
@@ -114,22 +145,22 @@ export default function DashboardPage() {
           .from('teams')
           .select('*')
           .in('id', allTeamIds)
-
         setTeams(teamsData || [])
       }
 
-      // Load unread notifications
-      const { data: notificationsData } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_read', false)
-        .order('created_at', { ascending: false })
-        .limit(5)
+      const notificationsData = notificationsResult.data || []
+      setNotifications(notificationsData)
 
-      setNotifications(notificationsData || [])
+      const loadTime = Date.now() - startTime
+      console.log(`[DashboardPage] Data loaded successfully in ${loadTime}ms`)
+      console.log(`[DashboardPage] Profile: ${profileData ? 'found' : 'none'}`)
+      console.log(`[DashboardPage] Upcoming competitions: ${upcoming.length}`)
+      console.log(`[DashboardPage] Recent scores: ${recent.length}`)
+      console.log(`[DashboardPage] Teams: ${allTeamIds.length}`)
+      console.log(`[DashboardPage] Notifications: ${notificationsData.length}`)
     } catch (error) {
-      console.error('Error loading dashboard:', error)
+      const loadTime = Date.now() - startTime
+      console.error(`[DashboardPage] Error occurred after ${loadTime}ms:`, error)
       toast.error('Failed to load dashboard data')
     } finally {
       setLoading(false)

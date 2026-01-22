@@ -4,14 +4,20 @@ import { Calendar, Users, Trophy, Target, ArrowRight, Clock } from 'lucide-react
 import { format } from 'date-fns'
 
 export default async function Home() {
-  const supabase = await createClient()
+  console.log('[HomePage] Starting to load...')
+  const startTime = Date.now()
+  
+  try {
+    const supabase = await createClient()
+    console.log('[HomePage] Supabase client created')
 
-  const currentYear = new Date().getFullYear()
-  const yearStart = `${currentYear}-01-01`
-  const yearEnd = `${currentYear}-12-31`
+    const currentYear = new Date().getFullYear()
+    const yearStart = `${currentYear}-01-01`
+    const yearEnd = `${currentYear}-12-31`
 
-  // Run all queries in parallel for better performance
-  const [
+    console.log('[HomePage] About to fetch data in parallel...')
+    // Run all queries in parallel for better performance
+    const [
     featuredCompetitionResult,
     upcomingCompetitionsResult,
     latestNewsResult,
@@ -73,35 +79,42 @@ export default async function Home() {
       .select('*', { count: 'exact', head: true }),
   ])
 
-  const featuredCompetition = featuredCompetitionResult.data
-  const upcomingCompetitions = upcomingCompetitionsResult.data
-  const latestNews = latestNewsResult.data
-  const disciplines = disciplinesResult.data
-  const activeShooters = activeShootersResult.count
-  const competitionsThisYear = competitionsThisYearResult.count
-  const registeredTeams = registeredTeamsResult.count
-  const disciplinesCount = disciplines?.length || 0
+    const featuredCompetition = featuredCompetitionResult.data
+    const upcomingCompetitions = upcomingCompetitionsResult.data
+    const latestNews = latestNewsResult.data
+    const disciplines = disciplinesResult.data
+    const activeShooters = activeShootersResult.count
+    const competitionsThisYear = competitionsThisYearResult.count
+    const registeredTeams = registeredTeamsResult.count
+    const disciplinesCount = disciplines?.length || 0
 
-  const getRegistrationStatus = (competition: any) => {
-    if (!competition) return 'closed'
-    const now = new Date()
-    const opens = competition.registration_opens ? new Date(competition.registration_opens) : null
-    const closes = competition.registration_closes ? new Date(competition.registration_closes) : null
+    const loadTime = Date.now() - startTime
+    console.log(`[HomePage] Data fetched successfully in ${loadTime}ms`)
+    console.log(`[HomePage] Featured competition: ${featuredCompetition ? 'found' : 'none'}`)
+    console.log(`[HomePage] Upcoming competitions: ${upcomingCompetitions?.length || 0}`)
+    console.log(`[HomePage] Latest news: ${latestNews?.length || 0}`)
+    console.log(`[HomePage] Disciplines: ${disciplinesCount}`)
 
-    if (opens && now < opens) return 'upcoming'
-    if (closes && now > closes) return 'closed'
-    if (opens && closes && now >= opens && now <= closes) return 'open'
-    return 'open'
-  }
+    const getRegistrationStatus = (competition: any) => {
+      if (!competition) return 'closed'
+      const now = new Date()
+      const opens = competition.registration_opens ? new Date(competition.registration_opens) : null
+      const closes = competition.registration_closes ? new Date(competition.registration_closes) : null
 
-  const formatDateRange = (startDate: string, endDate: string) => {
-    const start = new Date(startDate)
-    const end = new Date(endDate)
-    if (format(start, 'MMM yyyy') === format(end, 'MMM yyyy')) {
-      return `${format(start, 'MMM d')} - ${format(end, 'd, yyyy')}`
+      if (opens && now < opens) return 'upcoming'
+      if (closes && now > closes) return 'closed'
+      if (opens && closes && now >= opens && now <= closes) return 'open'
+      return 'open'
     }
-    return `${format(start, 'MMM d, yyyy')} - ${format(end, 'MMM d, yyyy')}`
-  }
+
+    const formatDateRange = (startDate: string, endDate: string) => {
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      if (format(start, 'MMM yyyy') === format(end, 'MMM yyyy')) {
+        return `${format(start, 'MMM d')} - ${format(end, 'd, yyyy')}`
+      }
+      return `${format(start, 'MMM d, yyyy')} - ${format(end, 'MMM d, yyyy')}`
+    }
 
   return (
     <div className="min-h-screen">
@@ -285,7 +298,12 @@ export default async function Home() {
         </section>
       )}
     </div>
-  )
+    )
+  } catch (error) {
+    const loadTime = Date.now() - startTime
+    console.error(`[HomePage] Error occurred after ${loadTime}ms:`, error)
+    throw error
+  }
 }
 
 // Stat Card Component

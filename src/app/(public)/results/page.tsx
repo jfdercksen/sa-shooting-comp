@@ -104,35 +104,49 @@ export default function ResultsPage() {
   }
 
   const fetchCompetitions = async () => {
-    // Fetch competitions that have verified scores
-    const { data: scores } = await supabase
-      .from('scores')
-      .select('registrations(competition_id)')
-      .not('verified_at', 'is', null)
+    console.log('[ResultsPage] fetchCompetitions: Starting...')
+    const startTime = Date.now()
+    try {
+      // Fetch competitions that have verified scores
+      console.log('[ResultsPage] fetchCompetitions: Fetching scores...')
+      const { data: scores } = await supabase
+        .from('scores')
+        .select('registrations(competition_id)')
+        .not('verified_at', 'is', null)
 
-    const competitionIds = [
-      ...new Set(
-        scores
-          ?.map((s: any) => s.registrations?.competition_id)
-          .filter(Boolean) || []
-      ),
-    ]
+      const competitionIds = [
+        ...new Set(
+          scores
+            ?.map((s: any) => s.registrations?.competition_id)
+            .filter(Boolean) || []
+        ),
+      ]
 
-    if (competitionIds.length > 0) {
-      const { data: comps } = await supabase
-        .from('competitions')
-        .select('*')
-        .in('id', competitionIds)
-        .order('start_date', { ascending: false })
+      console.log(`[ResultsPage] fetchCompetitions: Found ${competitionIds.length} competition IDs`)
 
-      if (comps) {
-        setCompetitions(comps)
-        if (comps.length > 0 && !selectedCompetition) {
-          setSelectedCompetition(comps[0].id)
+      if (competitionIds.length > 0) {
+        console.log('[ResultsPage] fetchCompetitions: Fetching competitions...')
+        const { data: comps } = await supabase
+          .from('competitions')
+          .select('*')
+          .in('id', competitionIds)
+          .order('start_date', { ascending: false })
+
+        if (comps) {
+          setCompetitions(comps)
+          if (comps.length > 0 && !selectedCompetition) {
+            setSelectedCompetition(comps[0].id)
+          }
+          const loadTime = Date.now() - startTime
+          console.log(`[ResultsPage] fetchCompetitions: Completed in ${loadTime}ms, found ${comps.length} competitions`)
         }
       }
+    } catch (error) {
+      const loadTime = Date.now() - startTime
+      console.error(`[ResultsPage] fetchCompetitions: Error after ${loadTime}ms:`, error)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const fetchStages = async () => {
@@ -152,6 +166,8 @@ export default function ResultsPage() {
   const fetchTeamResults = async () => {
     if (!selectedCompetition) return
 
+    console.log(`[ResultsPage] fetchTeamResults: Starting for competition ${selectedCompetition}`)
+    const startTime = Date.now()
     setLoading(true)
 
     try {
@@ -168,6 +184,7 @@ export default function ResultsPage() {
         query = query.eq('discipline_id', selectedDiscipline)
       }
 
+      console.log('[ResultsPage] fetchTeamResults: Querying team_leaderboard view...')
       const { data: teamLeaderboardData, error: viewError } = await query
 
       if (!viewError && teamLeaderboardData && teamLeaderboardData.length > 0) {
@@ -185,16 +202,19 @@ export default function ResultsPage() {
           scores_counted: team.scores_counted || 0,
         }))
 
+        const loadTime = Date.now() - startTime
+        console.log(`[ResultsPage] fetchTeamResults: Completed in ${loadTime}ms, found ${transformed.length} teams`)
         setTeamResults(transformed)
         setLoading(false)
         return
       }
 
       // Fallback to manual aggregation if view doesn't exist or returns no data
-      console.warn('team_leaderboard view not found or empty, using manual aggregation')
+      console.warn('[ResultsPage] fetchTeamResults: team_leaderboard view not found or empty, using manual aggregation')
       await fetchTeamResultsManual()
     } catch (error) {
-      console.error('Error fetching team leaderboard:', error)
+      const loadTime = Date.now() - startTime
+      console.error(`[ResultsPage] fetchTeamResults: Error after ${loadTime}ms:`, error)
       // Fallback to manual aggregation
       await fetchTeamResultsManual()
     }
@@ -347,11 +367,14 @@ export default function ResultsPage() {
   const fetchResults = async () => {
     if (!selectedCompetition) return
 
+    console.log(`[ResultsPage] fetchResults: Starting for competition ${selectedCompetition}`)
+    const startTime = Date.now()
     setLoading(true)
 
     try {
       // Try to use competition_leaderboard view first (if it exists)
       // Note: Views may not be in TypeScript types, so we use 'any' type assertion
+      console.log('[ResultsPage] fetchResults: Querying competition_leaderboard view...')
       const { data: leaderboardData, error: viewError } = await (supabase as any)
         .from('competition_leaderboard')
         .select('*')
@@ -435,15 +458,18 @@ export default function ResultsPage() {
           if (discs) setDisciplines(discs)
         }
 
+        const loadTime = Date.now() - startTime
+        console.log(`[ResultsPage] fetchResults: Completed in ${loadTime}ms, found ${filteredResults.length} results`)
         setLoading(false)
         return
       }
 
       // Fallback to manual aggregation if view doesn't exist
-      console.warn('competition_leaderboard view not found, using manual aggregation')
+      console.warn('[ResultsPage] fetchResults: competition_leaderboard view not found, using manual aggregation')
       await fetchResultsManual()
     } catch (error) {
-      console.error('Error fetching leaderboard:', error)
+      const loadTime = Date.now() - startTime
+      console.error(`[ResultsPage] fetchResults: Error after ${loadTime}ms:`, error)
       // Fallback to manual aggregation
       await fetchResultsManual()
     }
