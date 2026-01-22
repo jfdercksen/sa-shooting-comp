@@ -105,22 +105,35 @@ export default function ScoringPage() {
     if (regs) {
       setRegistrations(regs)
 
-      // Fetch stages for each registration's competition
+      // Fetch stages for each registration's competition in parallel
       const stagesMap: Record<string, Stage[]> = {}
+      
+      // Get unique competition IDs
+      const uniqueCompetitionIds = [...new Set(
+        regs
+          .map(reg => reg.competition_id)
+          .filter((id): id is string => id !== null)
+      )]
 
-      for (const reg of regs) {
-        if (reg.competition_id) {
-          const { data: compStages } = await supabase
-            .from('stages')
-            .select('*')
-            .eq('competition_id', reg.competition_id)
-            .order('stage_number', { ascending: true })
+      // Fetch all stages in parallel
+      const stagePromises = uniqueCompetitionIds.map(competitionId =>
+        supabase
+          .from('stages')
+          .select('*')
+          .eq('competition_id', competitionId)
+          .order('stage_number', { ascending: true })
+          .then(result => ({ competitionId, stages: result.data || [] }))
+      )
 
-          if (compStages) {
-            stagesMap[reg.competition_id] = compStages
-          }
+      const stageResults = await Promise.all(stagePromises)
+      
+      // Build stages map
+      stageResults.forEach(({ competitionId, stages }) => {
+        if (stages.length > 0) {
+          stagesMap[competitionId] = stages
         }
-      }
+      })
+      
       setStages(stagesMap)
     }
 

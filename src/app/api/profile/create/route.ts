@@ -26,12 +26,9 @@ export async function POST(request: NextRequest) {
       }
     )
 
-    // Verify user exists by attempting to query auth.users via RPC or wait
-    // The foreign key constraint profiles_id_fkey requires the user to exist in auth.users
-    // Add a small delay to ensure user is committed
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
     // Ensure the profile data has the correct user ID
+    // Note: The foreign key constraint profiles_id_fkey requires the user to exist in auth.users
+    // Supabase handles this automatically - no delay needed
     const profileToInsert = {
       ...profileData,
       id: userId, // Must match auth.users.id for foreign key constraint

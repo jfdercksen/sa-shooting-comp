@@ -6,60 +6,80 @@ import { format } from 'date-fns'
 export default async function Home() {
   const supabase = await createClient()
 
-  // Fetch featured competition
-  const { data: featuredCompetition } = await supabase
-    .from('competitions')
-    .select('*')
-    .eq('is_featured', true)
-    .eq('is_active', true)
-    .order('start_date', { ascending: true })
-    .limit(1)
-    .single()
-
-  // Fetch upcoming competitions (next 3)
-  const { data: upcomingCompetitions } = await supabase
-    .from('competitions')
-    .select('*')
-    .eq('is_active', true)
-    .gte('start_date', new Date().toISOString())
-    .order('start_date', { ascending: true })
-    .limit(3)
-
-  // Fetch latest news posts
-  const { data: latestNews } = await supabase
-    .from('news_posts')
-    .select('*')
-    .eq('is_published', true)
-    .order('published_at', { ascending: false })
-    .limit(3)
-
-  // Fetch active disciplines
-  const { data: disciplines } = await supabase
-    .from('disciplines')
-    .select('*')
-    .eq('is_active', true)
-    .order('display_order', { ascending: true, nullsFirst: false })
-
-  // Fetch stats
-  const { count: activeShooters } = await supabase
-    .from('profiles')
-    .select('*', { count: 'exact', head: true })
-
   const currentYear = new Date().getFullYear()
   const yearStart = `${currentYear}-01-01`
   const yearEnd = `${currentYear}-12-31`
-  
-  const { count: competitionsThisYear } = await supabase
-    .from('competitions')
-    .select('*', { count: 'exact', head: true })
-    .eq('is_active', true)
-    .gte('start_date', yearStart)
-    .lte('start_date', yearEnd)
 
-  const { count: registeredTeams } = await supabase
-    .from('teams')
-    .select('*', { count: 'exact', head: true })
+  // Run all queries in parallel for better performance
+  const [
+    featuredCompetitionResult,
+    upcomingCompetitionsResult,
+    latestNewsResult,
+    disciplinesResult,
+    activeShootersResult,
+    competitionsThisYearResult,
+    registeredTeamsResult,
+  ] = await Promise.all([
+    // Fetch featured competition
+    supabase
+      .from('competitions')
+      .select('*')
+      .eq('is_featured', true)
+      .eq('is_active', true)
+      .order('start_date', { ascending: true })
+      .limit(1)
+      .single(),
+    
+    // Fetch upcoming competitions (next 3)
+    supabase
+      .from('competitions')
+      .select('*')
+      .eq('is_active', true)
+      .gte('start_date', new Date().toISOString())
+      .order('start_date', { ascending: true })
+      .limit(3),
+    
+    // Fetch latest news posts
+    supabase
+      .from('news_posts')
+      .select('*')
+      .eq('is_published', true)
+      .order('published_at', { ascending: false })
+      .limit(3),
+    
+    // Fetch active disciplines
+    supabase
+      .from('disciplines')
+      .select('*')
+      .eq('is_active', true)
+      .order('display_order', { ascending: true, nullsFirst: false }),
+    
+    // Fetch active shooters count
+    supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true }),
+    
+    // Fetch competitions this year count
+    supabase
+      .from('competitions')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_active', true)
+      .gte('start_date', yearStart)
+      .lte('start_date', yearEnd),
+    
+    // Fetch registered teams count
+    supabase
+      .from('teams')
+      .select('*', { count: 'exact', head: true }),
+  ])
 
+  const featuredCompetition = featuredCompetitionResult.data
+  const upcomingCompetitions = upcomingCompetitionsResult.data
+  const latestNews = latestNewsResult.data
+  const disciplines = disciplinesResult.data
+  const activeShooters = activeShootersResult.count
+  const competitionsThisYear = competitionsThisYearResult.count
+  const registeredTeams = registeredTeamsResult.count
   const disciplinesCount = disciplines?.length || 0
 
   const getRegistrationStatus = (competition: any) => {
