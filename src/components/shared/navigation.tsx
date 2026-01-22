@@ -120,7 +120,8 @@ export default function Navigation() {
   }, [isUserMenuOpen])
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    // Use route handler to properly handle cookie removal
+    await fetch('/auth/logout', { method: 'POST' })
     router.push('/')
     router.refresh()
   }
