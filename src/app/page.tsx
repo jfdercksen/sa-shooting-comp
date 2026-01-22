@@ -17,67 +17,70 @@ export default async function Home() {
 
     console.log('[HomePage] About to fetch data in parallel...')
     // Run all queries in parallel for better performance
-    const [
-    featuredCompetitionResult,
-    upcomingCompetitionsResult,
-    latestNewsResult,
-    disciplinesResult,
-    activeShootersResult,
-    competitionsThisYearResult,
-    registeredTeamsResult,
-  ] = await Promise.all([
-    // Fetch featured competition
-    supabase
-      .from('competitions')
-      .select('*')
-      .eq('is_featured', true)
-      .eq('is_active', true)
-      .order('start_date', { ascending: true })
-      .limit(1)
-      .single(),
-    
-    // Fetch upcoming competitions (next 3)
-    supabase
-      .from('competitions')
-      .select('*')
-      .eq('is_active', true)
-      .gte('start_date', new Date().toISOString())
-      .order('start_date', { ascending: true })
-      .limit(3),
-    
-    // Fetch latest news posts
-    supabase
-      .from('news_posts')
-      .select('*')
-      .eq('is_published', true)
-      .order('published_at', { ascending: false })
-      .limit(3),
-    
-    // Fetch active disciplines
-    supabase
-      .from('disciplines')
-      .select('*')
-      .eq('is_active', true)
-      .order('display_order', { ascending: true, nullsFirst: false }),
-    
-    // Fetch active shooters count
-    supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true }),
-    
-    // Fetch competitions this year count
-    supabase
-      .from('competitions')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_active', true)
-      .gte('start_date', yearStart)
-      .lte('start_date', yearEnd),
-    
-    // Fetch registered teams count
-    supabase
-      .from('teams')
-      .select('*', { count: 'exact', head: true }),
-  ])
+    // Using Promise.allSettled to handle partial failures gracefully
+    const results = await Promise.allSettled([
+      // Fetch featured competition (only needed fields)
+      supabase
+        .from('competitions')
+        .select('id, name, start_date, end_date, location, description, registration_opens, registration_closes')
+        .eq('is_featured', true)
+        .eq('is_active', true)
+        .order('start_date', { ascending: true })
+        .limit(1)
+        .single(),
+      
+      // Fetch upcoming competitions (next 3, only needed fields)
+      supabase
+        .from('competitions')
+        .select('id, name, start_date, end_date, location')
+        .eq('is_active', true)
+        .gte('start_date', new Date().toISOString())
+        .order('start_date', { ascending: true })
+        .limit(3),
+      
+      // Fetch latest news posts (only needed fields)
+      supabase
+        .from('news_posts')
+        .select('id, title, slug, excerpt, featured_image, published_at')
+        .eq('is_published', true)
+        .order('published_at', { ascending: false })
+        .limit(3),
+      
+      // Fetch active disciplines (only needed fields)
+      supabase
+        .from('disciplines')
+        .select('id, name, slug, color')
+        .eq('is_active', true)
+        .order('display_order', { ascending: true, nullsFirst: false })
+        .limit(20), // Limit to prevent large datasets
+      
+      // Fetch active shooters count
+      supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true }),
+      
+      // Fetch competitions this year count
+      supabase
+        .from('competitions')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_active', true)
+        .gte('start_date', yearStart)
+        .lte('start_date', yearEnd),
+      
+      // Fetch registered teams count
+      supabase
+        .from('teams')
+        .select('id', { count: 'exact', head: true }),
+    ])
+
+    // Extract results with error handling
+    const featuredCompetitionResult = results[0].status === 'fulfilled' ? results[0].value : { data: null, error: null }
+    const upcomingCompetitionsResult = results[1].status === 'fulfilled' ? results[1].value : { data: null, error: null }
+    const latestNewsResult = results[2].status === 'fulfilled' ? results[2].value : { data: null, error: null }
+    const disciplinesResult = results[3].status === 'fulfilled' ? results[3].value : { data: null, error: null }
+    const activeShootersResult = results[4].status === 'fulfilled' ? results[4].value : { count: 0 }
+    const competitionsThisYearResult = results[5].status === 'fulfilled' ? results[5].value : { count: 0 }
+    const registeredTeamsResult = results[6].status === 'fulfilled' ? results[6].value : { count: 0 }
 
     const featuredCompetition = featuredCompetitionResult.data
     const upcomingCompetitions = upcomingCompetitionsResult.data
