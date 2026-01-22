@@ -1,19 +1,38 @@
 import { createClient } from '@/lib/supabase/server'
 
+// Use edge runtime for faster execution
+export const runtime = 'edge'
+export const dynamic = 'force-dynamic'
+
 export default async function TestDBPage() {
   console.log('[TestDBPage] Starting...')
   const startTime = Date.now()
   
   try {
-    const supabase = await createClient()
+    // Add timeout wrapper
+    const clientPromise = createClient()
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Client creation timeout after 5s')), 5000)
+    )
+    
+    const supabase = await Promise.race([clientPromise, timeoutPromise]) as Awaited<ReturnType<typeof createClient>>
     console.log('[TestDBPage] Supabase client created')
 
-    // Simple test query
+    // Simple test query with timeout
     console.log('[TestDBPage] Running simple query...')
-    const { data, error } = await supabase
+    const queryPromise = supabase
       .from('competitions')
       .select('id, name')
       .limit(1)
+    
+    const queryTimeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Query timeout after 10s')), 10000)
+    )
+    
+    const { data, error } = await Promise.race([
+      queryPromise.then(result => result),
+      queryTimeoutPromise
+    ]) as { data: any, error: any }
 
     const loadTime = Date.now() - startTime
     console.log(`[TestDBPage] Query completed in ${loadTime}ms`)

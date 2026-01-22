@@ -5,6 +5,12 @@
     },
     "src/app/api/**/*.ts": {
       "maxDuration": 30
+    },
+    "src/app/test-db/**": {
+      "maxDuration": 10
+    },
+    "src/app/test-simple/**": {
+      "maxDuration": 5
     }
   },
   "regions": ["iad1"]
