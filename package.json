@@ -13,7 +13,8 @@
     "update-match-types": "tsx src/scripts/update-match-types.ts",
     "check-scoring": "tsx src/scripts/check-scoring-system.ts",
     "debug-teams": "tsx src/scripts/debug-teams.ts",
-    "assign-captain": "tsx src/scripts/assign-team-captain.ts"
+    "assign-captain": "tsx src/scripts/assign-team-captain.ts",
+    "audit-function-security": "tsx src/scripts/audit-function-security.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

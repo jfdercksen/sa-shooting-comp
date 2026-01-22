@@ -55,6 +55,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Set secure search_path to prevent security vulnerabilities
+ALTER FUNCTION handle_new_user() SET search_path = 'public';
+
 -- Create trigger
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
