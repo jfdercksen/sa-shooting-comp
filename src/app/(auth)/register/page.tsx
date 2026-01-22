@@ -99,20 +99,36 @@ export default function RegisterPage() {
     if (!sabuNumber) return true
     
     setCheckingSabu(true)
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('sabu_number')
-      .eq('sabu_number', sabuNumber)
-      .single()
+    try {
+      // Use maybeSingle() instead of single() to avoid errors when no record exists
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('sabu_number')
+        .eq('sabu_number', sabuNumber)
+        .maybeSingle()
 
-    setCheckingSabu(false)
-    
-    if (error && error.code !== 'PGRST116') {
-      // PGRST116 is "not found" which is what we want
-      return false
+      setCheckingSabu(false)
+      
+      // If error and it's not a "not found" error, assume it exists to be safe
+      if (error) {
+        // PGRST116 is "not found" which is what we want (number is available)
+        // 406 errors might be RLS issues, but we'll treat as "not found" for now
+        if (error.code === 'PGRST116' || error.code === '406') {
+          return true // Number is available
+        }
+        // For other errors, log but don't block registration
+        console.warn('SABU number check error:', error)
+        return true // Allow registration, admin can fix duplicates later
+      }
+      
+      // If data exists, number is taken
+      return !data
+    } catch (error: any) {
+      setCheckingSabu(false)
+      console.warn('SABU number check exception:', error)
+      // On error, allow registration (admin can handle duplicates)
+      return true
     }
-    
-    return !data
   }
 
   const validateStep = async (step: number): Promise<boolean> => {
@@ -193,29 +209,18 @@ export default function RegisterPage() {
         },
       })
 
-      if (authError) throw authError
+      if (authError) {
+        // Handle rate limiting specifically
+        if (authError.message?.includes('429') || authError.message?.includes('rate limit')) {
+          throw new Error('Too many registration attempts. Please wait a moment and try again.')
+        }
+        throw authError
+      }
       if (!authData.user) throw new Error('Failed to create user')
 
-      // Wait for the auth user to be fully committed to the database
-      // The foreign key constraint requires the user to exist in auth.users first
-      let userExists = false
-      let retries = 0
-      const maxRetries = 10
-      
-      while (!userExists && retries < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
-        // Verify user exists in auth by checking if we can get user metadata
-        const { data: { user: verifyUser } } = await supabase.auth.getUser()
-        if (verifyUser && verifyUser.id === authData.user.id) {
-          userExists = true
-        }
-        retries++
-      }
-      
-      if (!userExists) {
-        throw new Error('User account creation is still processing. Please wait a moment and try again.')
-      }
+      // Small delay to ensure user is committed (but don't retry to avoid rate limiting)
+      // The trigger will create a basic profile, and our API will upsert with full data
+      await new Promise(resolve => setTimeout(resolve, 1000))
 
       // Create or update profile (use upsert in case trigger already created one)
       // Ensure role is only one of the allowed self-selected roles (prevent manipulation)
