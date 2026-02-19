@@ -20,6 +20,8 @@ interface RoundScore {
   isV: boolean
 }
 
+type SighterMode = 'count_sighter_1' | 'count_sighter_2' | 'count_none'
+
 interface StageScore {
   stageId: string
   rounds: RoundScore[]
@@ -29,9 +31,142 @@ interface StageScore {
   isDNF: boolean
   isDQ: boolean
   notes: string
+  sighterMode: SighterMode
 }
 
 const STORAGE_PREFIX = 'score_draft_'
+
+const DEFAULT_SIGHTER_MODE: SighterMode = 'count_none'
+
+const getTotalShots = (stage: Stage) => {
+  const scoringRounds = stage.rounds || 10
+  const sighters = stage.sighters || 0
+  return scoringRounds + sighters
+}
+
+const getScoringWindow = (totalShots: number, scoringRounds: number, sighterMode: SighterMode) => {
+  const preferredStart =
+    sighterMode === 'count_sighter_1' ? 1 : sighterMode === 'count_sighter_2' ? 2 : 3
+
+  const maxStart = Math.max(1, totalShots - scoringRounds + 1)
+  const start = Math.min(preferredStart, maxStart)
+  const end = Math.min(totalShots, start + scoringRounds - 1)
+
+  return { start, end }
+}
+
+const calculateTotals = (rounds: RoundScore[], scoringWindow: { start: number; end: number }) => {
+  const scoringRounds = rounds.filter(
+    (round) => round.round >= scoringWindow.start && round.round <= scoringWindow.end
+  )
+  const baseScore = scoringRounds.reduce((sum, round) => sum + round.score, 0)
+  const xCount = scoringRounds.filter((round) => round.isX).length
+  const vCount = scoringRounds.filter((round) => round.isV).length
+  const vBonus = vCount * 0.001
+
+  return {
+    totalScore: Number((baseScore + vBonus).toFixed(3)),
+    xCount,
+    vCount,
+  }
+}
+
+const normalizeRoundsForScoringWindow = (
+  rounds: RoundScore[],
+  scoringWindow: { start: number; end: number }
+) => {
+  return rounds.map((round) => {
+    const isScoringShot = round.round >= scoringWindow.start && round.round <= scoringWindow.end
+    if (isScoringShot) return round
+    return {
+      ...round,
+      score: 0,
+      isX: false,
+      isV: false,
+    }
+  })
+}
+
+const buildScoreNotes = (stageScore: StageScore) => {
+  return JSON.stringify({
+    version: 2,
+    sighterMode: stageScore.sighterMode,
+    rounds: stageScore.rounds,
+    userNotes: stageScore.notes || '',
+  })
+}
+
+const parseScoreNotes = (rawNotes: string | null) => {
+  if (!rawNotes) {
+    return {
+      rounds: null as RoundScore[] | null,
+      sighterMode: DEFAULT_SIGHTER_MODE,
+      userNotes: '',
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(rawNotes)
+    const parsedRounds = Array.isArray(parsed?.rounds) ? (parsed.rounds as RoundScore[]) : null
+    const parsedMode = parsed?.sighterMode as SighterMode | undefined
+
+    return {
+      rounds: parsedRounds,
+      sighterMode:
+        parsedMode === 'count_sighter_1' ||
+        parsedMode === 'count_sighter_2' ||
+        parsedMode === 'count_none'
+          ? parsedMode
+          : DEFAULT_SIGHTER_MODE,
+      userNotes: typeof parsed?.userNotes === 'string' ? parsed.userNotes : '',
+    }
+  } catch {
+    // Legacy/plain notes format: keep the original note text.
+    return {
+      rounds: null as RoundScore[] | null,
+      sighterMode: DEFAULT_SIGHTER_MODE,
+      userNotes: rawNotes,
+    }
+  }
+}
+
+const normalizeStageScoreForStage = (stage: Stage, incoming?: Partial<StageScore>): StageScore => {
+  const scoringRounds = stage.rounds || 10
+  const totalShots = getTotalShots(stage)
+  const sighterMode: SighterMode =
+    incoming?.sighterMode === 'count_sighter_1' ||
+    incoming?.sighterMode === 'count_sighter_2' ||
+    incoming?.sighterMode === 'count_none'
+      ? incoming.sighterMode
+      : DEFAULT_SIGHTER_MODE
+
+  const sourceRounds = Array.isArray(incoming?.rounds) ? incoming.rounds : []
+  const rounds: RoundScore[] = Array.from({ length: totalShots }, (_, index) => {
+    const existing = sourceRounds[index]
+    return {
+      round: index + 1,
+      score: typeof existing?.score === 'number' ? existing.score : 0,
+      isX: !!existing?.isX,
+      isV: !!existing?.isV,
+    }
+  })
+
+  const scoringWindow = getScoringWindow(rounds.length, scoringRounds, sighterMode)
+  const normalizedRounds = normalizeRoundsForScoringWindow(rounds, scoringWindow)
+  const totals = calculateTotals(normalizedRounds, scoringWindow)
+
+  return {
+    stageId: stage.id,
+    rounds: normalizedRounds,
+    totalScore: totals.totalScore,
+    xCount: totals.xCount,
+    vCount: totals.vCount,
+    isDNF: !!incoming?.isDNF,
+    isDQ: !!incoming?.isDQ,
+    notes: typeof incoming?.notes === 'string' ? incoming.notes : '',
+    sighterMode,
+  }
+}
 
 export default function ScoringPage() {
   const [registrations, setRegistrations] = useState<any[]>([])
@@ -190,8 +325,13 @@ export default function ScoringPage() {
       const draft = localStorage.getItem(`${STORAGE_PREFIX}${registrationId}`)
       if (draft) {
         try {
-          const parsed = JSON.parse(draft)
-          setStageScores(parsed)
+          const parsed = JSON.parse(draft) as Record<string, Partial<StageScore>>
+          const compStages = stages[reg.competition_id] || []
+          const normalizedScores: Record<string, StageScore> = {}
+          compStages.forEach((stage) => {
+            normalizedScores[stage.id] = normalizeStageScoreForStage(stage, parsed?.[stage.id])
+          })
+          setStageScores(normalizedScores)
           toast.info('Draft loaded')
         } catch (error) {
           console.error('Error loading draft:', error)
@@ -214,59 +354,62 @@ export default function ScoringPage() {
         const existingScore = submittedScores.find(
           (s: any) => s.registration_id === registrationId && s.stage_id === stage.id
         )
+        const scoringRounds = stage.rounds || 10
+        const totalShots = getTotalShots(stage)
 
         if (existingScore && !existingScore.verified_at) {
           // Load existing pending score for editing
           // Try to parse rounds from notes if available
           let rounds: RoundScore[] = []
-          const numRounds = stage.rounds || 10
+          const parsedNotes = parseScoreNotes(existingScore.notes)
+          let sighterMode: SighterMode = parsedNotes.sighterMode
           
-          if (existingScore.notes) {
-            try {
-              const notesData = JSON.parse(existingScore.notes)
-              if (notesData.rounds && Array.isArray(notesData.rounds)) {
-                rounds = notesData.rounds
-              }
-            } catch {
-              // If parsing fails, initialize empty rounds
-            }
+          if (parsedNotes.rounds) {
+            rounds = parsedNotes.rounds
           }
 
           // If no rounds parsed, initialize empty
           if (rounds.length === 0) {
-            for (let i = 1; i <= numRounds; i++) {
+            for (let i = 1; i <= totalShots; i++) {
               rounds.push({ round: i, score: 0, isX: false, isV: false })
             }
           }
 
+          const scoringWindow = getScoringWindow(rounds.length, scoringRounds, sighterMode)
+          const normalizedRounds = normalizeRoundsForScoringWindow(rounds, scoringWindow)
+          const totals = calculateTotals(normalizedRounds, scoringWindow)
+
           newScores[stage.id] = {
             stageId: stage.id,
-            rounds,
-            totalScore: existingScore.score || 0,
-            xCount: existingScore.x_count || 0,
-            vCount: existingScore.v_count || 0,
+            rounds: normalizedRounds,
+            totalScore: totals.totalScore,
+            xCount: totals.xCount,
+            vCount: totals.vCount,
             isDNF: existingScore.is_dnf || false,
             isDQ: existingScore.is_dq || false,
-            notes: existingScore.notes || '',
+            notes: parsedNotes.userNotes,
+            sighterMode,
           }
           setEditingScoreId(existingScore.id)
         } else {
           // Initialize new score entry
           const rounds: RoundScore[] = []
-          const numRounds = stage.rounds || 10
-          for (let i = 1; i <= numRounds; i++) {
+          for (let i = 1; i <= totalShots; i++) {
             rounds.push({ round: i, score: 0, isX: false, isV: false })
           }
+          const scoringWindow = getScoringWindow(totalShots, scoringRounds, DEFAULT_SIGHTER_MODE)
+          const totals = calculateTotals(rounds, scoringWindow)
 
           newScores[stage.id] = {
             stageId: stage.id,
             rounds,
-            totalScore: 0,
-            xCount: 0,
-            vCount: 0,
+            totalScore: totals.totalScore,
+            xCount: totals.xCount,
+            vCount: totals.vCount,
             isDNF: false,
             isDQ: false,
             notes: '',
+            sighterMode: DEFAULT_SIGHTER_MODE,
           }
         }
       })
@@ -290,6 +433,8 @@ export default function ScoringPage() {
   ) => {
     const stageScore = stageScores[stageId]
     if (!stageScore) return
+    const currentStage = selectedStages.find((stage) => stage.id === stageId)
+    const scoringRounds = currentStage?.rounds || 10
 
     const newRounds = [...stageScore.rounds]
     newRounds[roundIndex] = {
@@ -297,19 +442,55 @@ export default function ScoringPage() {
       [field]: value,
     }
 
-    // Recalculate totals
-    const totalScore = newRounds.reduce((sum, r) => sum + r.score, 0)
-    const xCount = newRounds.filter((r) => r.isX).length
-    const vCount = newRounds.filter((r) => r.isV).length
+    // Recalculate totals from the selected 10-shot scoring window.
+    const scoringWindow = getScoringWindow(newRounds.length, scoringRounds, stageScore.sighterMode)
+    const totals = calculateTotals(newRounds, scoringWindow)
 
     setStageScores({
       ...stageScores,
       [stageId]: {
         ...stageScore,
         rounds: newRounds,
-        totalScore,
-        xCount,
-        vCount,
+        totalScore: totals.totalScore,
+        xCount: totals.xCount,
+        vCount: totals.vCount,
+      },
+    })
+  }
+
+  const updateSighterMode = (stageId: string, sighterMode: SighterMode) => {
+    const currentStage = selectedStages.find((stage) => stage.id === stageId)
+    if (!currentStage) return
+    const scoringRounds = currentStage.rounds || 10
+    const totalShots = getTotalShots(currentStage)
+    const current = stageScores[stageId]
+
+    const baseRounds: RoundScore[] = Array.from({ length: totalShots }, (_, index) => {
+      const existing = current?.rounds[index]
+      return {
+        round: index + 1,
+        score: typeof existing?.score === 'number' ? existing.score : 0,
+        isX: !!existing?.isX,
+        isV: !!existing?.isV,
+      }
+    })
+
+    const scoringWindow = getScoringWindow(baseRounds.length, scoringRounds, sighterMode)
+    const normalizedRounds = normalizeRoundsForScoringWindow(baseRounds, scoringWindow)
+    const totals = calculateTotals(normalizedRounds, scoringWindow)
+
+    setStageScores({
+      ...stageScores,
+      [stageId]: {
+        stageId,
+        rounds: normalizedRounds,
+        sighterMode,
+        totalScore: totals.totalScore,
+        xCount: totals.xCount,
+        vCount: totals.vCount,
+        isDNF: current?.isDNF || false,
+        isDQ: current?.isDQ || false,
+        notes: current?.notes || '',
       },
     })
   }
@@ -334,6 +515,14 @@ export default function ScoringPage() {
       // Submit each stage score
       for (const [sid, stageScore] of stagesToSubmit) {
         if (!stageScore || typeof stageScore === 'string') continue
+        const currentStage = selectedStages.find((stage) => stage.id === sid)
+        const scoringRounds = currentStage?.rounds || 10
+        const scoringWindow = getScoringWindow(
+          stageScore.rounds.length,
+          scoringRounds,
+          stageScore.sighterMode
+        )
+        const totals = calculateTotals(stageScore.rounds, scoringWindow)
 
         // Check if score already exists for this stage
         const existingScore = submittedScores.find(
@@ -343,12 +532,12 @@ export default function ScoringPage() {
         const scoreData = {
           registration_id: selectedRegistration,
           stage_id: sid,
-          score: stageScore.isDNF || stageScore.isDQ ? 0 : stageScore.totalScore,
-          x_count: stageScore.xCount,
-          v_count: stageScore.vCount,
+          score: stageScore.isDNF || stageScore.isDQ ? 0 : totals.totalScore,
+          x_count: totals.xCount,
+          v_count: totals.vCount,
           is_dnf: stageScore.isDNF || false,
           is_dq: stageScore.isDQ || false,
-          notes: stageScore.notes || null,
+          notes: buildScoreNotes(stageScore),
           submitted_by: user.id,
           submitted_at: new Date().toISOString(),
         }
@@ -590,7 +779,7 @@ export default function ScoringPage() {
 
               const stageScore = stageScores[stage.id] || {
                 stageId: stage.id,
-                rounds: Array.from({ length: stage.rounds || 10 }, (_, i) => ({
+                rounds: Array.from({ length: getTotalShots(stage) }, (_, i) => ({
                   round: i + 1,
                   score: 0,
                   isX: false,
@@ -602,7 +791,14 @@ export default function ScoringPage() {
                 isDNF: false,
                 isDQ: false,
                 notes: '',
+                sighterMode: DEFAULT_SIGHTER_MODE,
               }
+              const scoringRounds = stage.rounds || 10
+              const scoringWindow = getScoringWindow(
+                stageScore.rounds.length,
+                scoringRounds,
+                stageScore.sighterMode
+              )
 
               return (
                 <div key={stage.id} className={`border-l-4 rounded-lg p-4 ml-4 ${isVerified ? 'border-green-500 bg-green-50' : isPending ? 'border-yellow-500 bg-yellow-50' : 'border-gray-300 bg-gray-50'}`}>
@@ -689,6 +885,48 @@ export default function ScoringPage() {
 
                       {!stageScore.isDNF && !stageScore.isDQ && (
                     <>
+                      {/* Sighter Count Mode */}
+                      <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                        <div className="text-sm font-semibold text-blue-900 mb-2">
+                          Sighter Count Option (10 scoring shots total)
+                        </div>
+                        <div className="flex flex-wrap gap-4 text-sm text-blue-800">
+                          <label className="inline-flex items-center">
+                            <input
+                              type="radio"
+                              name={`sighter-mode-${stage.id}`}
+                              checked={stageScore.sighterMode === 'count_sighter_1'}
+                              onChange={() => updateSighterMode(stage.id, 'count_sighter_1')}
+                              className="mr-2"
+                            />
+                            Count Sighter 1 (shots 1-10)
+                          </label>
+                          <label className="inline-flex items-center">
+                            <input
+                              type="radio"
+                              name={`sighter-mode-${stage.id}`}
+                              checked={stageScore.sighterMode === 'count_sighter_2'}
+                              onChange={() => updateSighterMode(stage.id, 'count_sighter_2')}
+                              className="mr-2"
+                            />
+                            Count Sighter 2 (shots 2-11)
+                          </label>
+                          <label className="inline-flex items-center">
+                            <input
+                              type="radio"
+                              name={`sighter-mode-${stage.id}`}
+                              checked={stageScore.sighterMode === 'count_none'}
+                              onChange={() => updateSighterMode(stage.id, 'count_none')}
+                              className="mr-2"
+                            />
+                            Count No Sighters (shots 3-12)
+                          </label>
+                        </div>
+                        <div className="mt-2 text-xs text-blue-700">
+                          Shots 1 and 2 are always marked as sighters on the card.
+                        </div>
+                      </div>
+
                       {/* Score Grid */}
                       <div className="overflow-x-auto mb-4">
                         <table className="min-w-full border-collapse">
@@ -699,6 +937,9 @@ export default function ScoringPage() {
                               </th>
                               <th className="border border-gray-300 px-3 py-2 text-left text-sm font-semibold text-gray-700">
                                 Score
+                              </th>
+                              <th className="border border-gray-300 px-3 py-2 text-left text-sm font-semibold text-gray-700">
+                                Shot Type
                               </th>
                               <th className="border border-gray-300 px-3 py-2 text-center text-sm font-semibold text-gray-700">
                                 X
@@ -715,20 +956,47 @@ export default function ScoringPage() {
                                   {round.round}
                                 </td>
                                 <td className="border border-gray-300 px-3 py-2">
-                                  <select
-                                    value={round.score}
-                                    onChange={(e) =>
-                                      updateRoundScore(stage.id, index, 'score', parseInt(e.target.value))
-                                    }
-                                    disabled={isVerified}
-                                    className={`w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent ${isVerified ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                                  >
-                                    {[0, 1, 2, 3, 4, 5].map((val) => (
-                                      <option key={val} value={val}>
-                                        {val}
-                                      </option>
-                                    ))}
-                                  </select>
+                                  {round.round >= scoringWindow.start && round.round <= scoringWindow.end ? (
+                                    <select
+                                      value={round.score}
+                                      onChange={(e) =>
+                                        updateRoundScore(stage.id, index, 'score', parseInt(e.target.value))
+                                      }
+                                      disabled={isVerified}
+                                      className={`w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent ${isVerified ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                    >
+                                      {[0, 1, 2, 3, 4, 5].map((val) => (
+                                        <option key={val} value={val}>
+                                          {val}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <div className="w-full px-2 py-1 bg-gray-100 text-gray-500 rounded border border-gray-200 text-center">
+                                      -
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="border border-gray-300 px-3 py-2 text-xs">
+                                  {round.round <= 2 ? (
+                                    round.round >= scoringWindow.start && round.round <= scoringWindow.end ? (
+                                      <span className="inline-flex rounded-full bg-purple-100 px-2 py-1 font-semibold text-purple-800">
+                                        Sighter + Scoring
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex rounded-full bg-yellow-100 px-2 py-1 font-semibold text-yellow-800">
+                                        Sighter
+                                      </span>
+                                    )
+                                  ) : round.round >= scoringWindow.start && round.round <= scoringWindow.end ? (
+                                    <span className="inline-flex rounded-full bg-green-100 px-2 py-1 font-semibold text-green-800">
+                                      Scoring
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex rounded-full bg-gray-100 px-2 py-1 font-semibold text-gray-700">
+                                      Excluded
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="border border-gray-300 px-3 py-2 text-center">
                                   <input
@@ -737,7 +1005,10 @@ export default function ScoringPage() {
                                     onChange={(e) =>
                                       updateRoundScore(stage.id, index, 'isX', e.target.checked)
                                     }
-                                    disabled={isVerified}
+                                    disabled={
+                                      isVerified ||
+                                      !(round.round >= scoringWindow.start && round.round <= scoringWindow.end)
+                                    }
                                     className="h-4 w-4 text-[#1e40af] focus:ring-[#1e40af] disabled:opacity-50 disabled:cursor-not-allowed"
                                   />
                                 </td>
@@ -748,7 +1019,10 @@ export default function ScoringPage() {
                                     onChange={(e) =>
                                       updateRoundScore(stage.id, index, 'isV', e.target.checked)
                                     }
-                                    disabled={isVerified}
+                                    disabled={
+                                      isVerified ||
+                                      !(round.round >= scoringWindow.start && round.round <= scoringWindow.end)
+                                    }
                                     className="h-4 w-4 text-[#1e40af] focus:ring-[#1e40af] disabled:opacity-50 disabled:cursor-not-allowed"
                                   />
                                 </td>
@@ -760,9 +1034,12 @@ export default function ScoringPage() {
 
                       {/* Running Total */}
                       <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                        <div className="text-xs text-gray-600 mb-2">
+                          Counting shots {scoringWindow.start}-{scoringWindow.end} for scoring totals
+                        </div>
                         <div className="grid grid-cols-3 gap-4">
                           <div>
-                            <div className="text-sm text-gray-600">Total Score</div>
+                            <div className="text-sm text-gray-600">Total Score (incl. V bonus)</div>
                             <div className="text-2xl font-bold text-gray-900">{stageScore.totalScore}</div>
                           </div>
                           <div>
