@@ -16,7 +16,6 @@ type Discipline = Database['public']['Tables']['disciplines']['Row']
 interface RoundScore {
   round: number
   score: number
-  isX: boolean
   isV: boolean
 }
 
@@ -26,7 +25,6 @@ interface StageScore {
   stageId: string
   rounds: RoundScore[]
   totalScore: number
-  xCount: number
   vCount: number
   isDNF: boolean
   isDQ: boolean
@@ -60,13 +58,11 @@ const calculateTotals = (rounds: RoundScore[], scoringWindow: { start: number; e
     (round) => round.round >= scoringWindow.start && round.round <= scoringWindow.end
   )
   const baseScore = scoringRounds.reduce((sum, round) => sum + round.score, 0)
-  const xCount = scoringRounds.filter((round) => round.isX).length
   const vCount = scoringRounds.filter((round) => round.isV).length
   const vBonus = vCount * 0.001
 
   return {
     totalScore: Number((baseScore + vBonus).toFixed(3)),
-    xCount,
     vCount,
   }
 }
@@ -81,7 +77,6 @@ const normalizeRoundsForScoringWindow = (
     return {
       ...round,
       score: 0,
-      isX: false,
       isV: false,
     }
   })
@@ -146,7 +141,6 @@ const normalizeStageScoreForStage = (stage: Stage, incoming?: Partial<StageScore
     return {
       round: index + 1,
       score: typeof existing?.score === 'number' ? existing.score : 0,
-      isX: !!existing?.isX,
       isV: !!existing?.isV,
     }
   })
@@ -159,7 +153,6 @@ const normalizeStageScoreForStage = (stage: Stage, incoming?: Partial<StageScore
     stageId: stage.id,
     rounds: normalizedRounds,
     totalScore: totals.totalScore,
-    xCount: totals.xCount,
     vCount: totals.vCount,
     isDNF: !!incoming?.isDNF,
     isDQ: !!incoming?.isDQ,
@@ -371,7 +364,7 @@ export default function ScoringPage() {
           // If no rounds parsed, initialize empty
           if (rounds.length === 0) {
             for (let i = 1; i <= totalShots; i++) {
-              rounds.push({ round: i, score: 0, isX: false, isV: false })
+              rounds.push({ round: i, score: 0, isV: false })
             }
           }
 
@@ -383,7 +376,6 @@ export default function ScoringPage() {
             stageId: stage.id,
             rounds: normalizedRounds,
             totalScore: totals.totalScore,
-            xCount: totals.xCount,
             vCount: totals.vCount,
             isDNF: existingScore.is_dnf || false,
             isDQ: existingScore.is_dq || false,
@@ -395,7 +387,7 @@ export default function ScoringPage() {
           // Initialize new score entry
           const rounds: RoundScore[] = []
           for (let i = 1; i <= totalShots; i++) {
-            rounds.push({ round: i, score: 0, isX: false, isV: false })
+            rounds.push({ round: i, score: 0, isV: false })
           }
           const scoringWindow = getScoringWindow(totalShots, scoringRounds, DEFAULT_SIGHTER_MODE)
           const totals = calculateTotals(rounds, scoringWindow)
@@ -404,7 +396,6 @@ export default function ScoringPage() {
             stageId: stage.id,
             rounds,
             totalScore: totals.totalScore,
-            xCount: totals.xCount,
             vCount: totals.vCount,
             isDNF: false,
             isDQ: false,
@@ -428,7 +419,7 @@ export default function ScoringPage() {
   const updateRoundScore = (
     stageId: string,
     roundIndex: number,
-    field: 'score' | 'isX' | 'isV',
+    field: 'score' | 'isV',
     value: number | boolean
   ) => {
     const stageScore = stageScores[stageId]
@@ -452,7 +443,6 @@ export default function ScoringPage() {
         ...stageScore,
         rounds: newRounds,
         totalScore: totals.totalScore,
-        xCount: totals.xCount,
         vCount: totals.vCount,
       },
     })
@@ -470,7 +460,6 @@ export default function ScoringPage() {
       return {
         round: index + 1,
         score: typeof existing?.score === 'number' ? existing.score : 0,
-        isX: !!existing?.isX,
         isV: !!existing?.isV,
       }
     })
@@ -486,7 +475,6 @@ export default function ScoringPage() {
         rounds: normalizedRounds,
         sighterMode,
         totalScore: totals.totalScore,
-        xCount: totals.xCount,
         vCount: totals.vCount,
         isDNF: current?.isDNF || false,
         isDQ: current?.isDQ || false,
@@ -533,7 +521,7 @@ export default function ScoringPage() {
           registration_id: selectedRegistration,
           stage_id: sid,
           score: stageScore.isDNF || stageScore.isDQ ? 0 : totals.totalScore,
-          x_count: totals.xCount,
+          x_count: 0,
           v_count: totals.vCount,
           is_dnf: stageScore.isDNF || false,
           is_dq: stageScore.isDQ || false,
@@ -782,11 +770,9 @@ export default function ScoringPage() {
                 rounds: Array.from({ length: getTotalShots(stage) }, (_, i) => ({
                   round: i + 1,
                   score: 0,
-                  isX: false,
                   isV: false,
                 })),
                 totalScore: 0,
-                xCount: 0,
                 vCount: 0,
                 isDNF: false,
                 isDQ: false,
@@ -834,7 +820,7 @@ export default function ScoringPage() {
                         </span>
                         {existingScore.x_count !== null && existingScore.v_count !== null && (
                           <span className="text-gray-600 ml-2">
-                            (X: {existingScore.x_count}, V: {existingScore.v_count})
+                            (V: {existingScore.v_count})
                           </span>
                         )}
                       </div>
@@ -942,9 +928,6 @@ export default function ScoringPage() {
                                 Shot Type
                               </th>
                               <th className="border border-gray-300 px-3 py-2 text-center text-sm font-semibold text-gray-700">
-                                X
-                              </th>
-                              <th className="border border-gray-300 px-3 py-2 text-center text-sm font-semibold text-gray-700">
                                 V
                               </th>
                             </tr>
@@ -1001,20 +984,6 @@ export default function ScoringPage() {
                                 <td className="border border-gray-300 px-3 py-2 text-center">
                                   <input
                                     type="checkbox"
-                                    checked={round.isX}
-                                    onChange={(e) =>
-                                      updateRoundScore(stage.id, index, 'isX', e.target.checked)
-                                    }
-                                    disabled={
-                                      isVerified ||
-                                      !(round.round >= scoringWindow.start && round.round <= scoringWindow.end)
-                                    }
-                                    className="h-4 w-4 text-[#1e40af] focus:ring-[#1e40af] disabled:opacity-50 disabled:cursor-not-allowed"
-                                  />
-                                </td>
-                                <td className="border border-gray-300 px-3 py-2 text-center">
-                                  <input
-                                    type="checkbox"
                                     checked={round.isV}
                                     onChange={(e) =>
                                       updateRoundScore(stage.id, index, 'isV', e.target.checked)
@@ -1037,14 +1006,10 @@ export default function ScoringPage() {
                         <div className="text-xs text-gray-600 mb-2">
                           Counting shots {scoringWindow.start}-{scoringWindow.end} for scoring totals
                         </div>
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-2 gap-4">
                           <div>
                             <div className="text-sm text-gray-600">Total Score (incl. V bonus)</div>
                             <div className="text-2xl font-bold text-gray-900">{stageScore.totalScore}</div>
-                          </div>
-                          <div>
-                            <div className="text-sm text-gray-600">X Count</div>
-                            <div className="text-2xl font-bold text-gray-900">{stageScore.xCount}</div>
                           </div>
                           <div>
                             <div className="text-sm text-gray-600">V Count</div>
@@ -1122,7 +1087,7 @@ export default function ScoringPage() {
                     Score
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    X / V
+                    V
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
@@ -1167,9 +1132,7 @@ export default function ScoringPage() {
                           score.score
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {score.x_count || 0} / {score.v_count || 0}
-                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{score.v_count || 0}</td>
                       <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(score)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {verifierName || '-'}
