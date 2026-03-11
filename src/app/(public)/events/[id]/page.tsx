@@ -258,7 +258,7 @@ export default async function EventDetailPage({
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-900">{match.match_name}</h3>
                         <p className="text-sm text-gray-600">
-                          {match.match_type}
+                          {match.distance}
                           {match.match_date && ` • ${format(new Date(match.match_date), 'MMM d, yyyy')}`}
                         </p>
                       </div>
