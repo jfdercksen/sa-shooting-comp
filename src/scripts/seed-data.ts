@@ -359,23 +359,19 @@ async function seedData() {
       console.log('🎯 Creating stages and sample scores...')
       const stageIds: string[] = []
 
-      // Create stages for first competition
+      // Create stages for first discipline
       const stageNames = ['Stage 1', 'Stage 2', 'Stage 3']
-      const matchTypes: ('SCOTTISH_SWORD' | 'FREESTATE_CUP' | 'KINGS_NORTON' | 'DALRYMPLE_CUP' | 'DAVE_SMITH_CUP')[] = [
-        'SCOTTISH_SWORD',
-        'FREESTATE_CUP',
-        'KINGS_NORTON'
-      ]
+      const stageDistances = ['300m', '500m', '600m']
+      const firstDisciplineId = disciplines[0].id
       for (let i = 0; i < 3; i++) {
         const { data: stageData, error: stageError } = await supabase
           .from('stages')
           .insert({
-            competition_id: competitionIds[0],
+            discipline_id: firstDisciplineId,
             name: stageNames[i],
             stage_number: i + 1,
-            distance: [300, 500, 600][i],
+            distance: stageDistances[i],
             rounds: 10,
-            match_type: matchTypes[i],
             max_score: 50,
           })
           .select()
