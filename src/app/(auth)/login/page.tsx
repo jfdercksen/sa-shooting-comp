@@ -24,8 +24,6 @@ function LoginForm() {
     
     if (verified === 'true') {
       toast.success('Email verified successfully! You can now log in.')
-    } else if (message) {
-      toast.info(decodeURIComponent(message))
     }
   }, [searchParams])
 
@@ -101,6 +99,24 @@ function LoginForm() {
         {/* Login Form */}
         <div className="bg-white rounded-lg shadow-lg p-8">
           <form onSubmit={handleLogin} className="space-y-6">
+            {searchParams.get('message') && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <Loader2 className="h-5 w-5 text-blue-400" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-blue-800">
+                      {decodeURIComponent(searchParams.get('message')!)}
+                    </p>
+                    <p className="mt-1 text-xs text-blue-600">
+                      Please check your inbox (and spam folder) for the verification link.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
                 {error}
@@ -200,14 +216,6 @@ function LoginForm() {
           </div>
         </div>
 
-        {/* Test Accounts Info */}
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-xs font-semibold text-blue-900 mb-2">Test Accounts:</p>
-          <div className="text-xs text-blue-800 space-y-1">
-            <div>Admin: johan@aiautomations.co.za / Johan.123</div>
-            <div>Shooter: shooter1@test.com / Test123!</div>
-          </div>
-        </div>
       </div>
     </div>
   )

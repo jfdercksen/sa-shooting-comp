@@ -120,10 +120,13 @@ export default function Navigation() {
   }, [isUserMenuOpen])
 
   const handleLogout = async () => {
-    // Use route handler to properly handle cookie removal
+    // Clear client-side session
+    await supabase.auth.signOut()
+    // Call server-side logout route to clear cookies
     await fetch('/auth/logout', { method: 'POST' })
-    router.push('/')
-    router.refresh()
+    
+    // Redirect and hard refresh to clear all state
+    window.location.href = '/'
   }
 
   const isActive = (path: string) => {
