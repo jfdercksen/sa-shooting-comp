@@ -1,11 +1,16 @@
 -- ============================================================
 -- Restructure: Stages → Disciplines, Matches → Stage Selection
 -- Run this in the Supabase SQL editor (Dashboard → SQL Editor)
+-- Safe to run multiple times (idempotent)
 -- ============================================================
 
 -- 1. Clean all existing stage and score data (clean slate)
 DELETE FROM scores;
-DELETE FROM match_stages; -- safe to run even if table doesn't exist yet
+-- match_stages may not exist yet on first run; ignore the error
+DO $$ BEGIN
+  DELETE FROM match_stages;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
 DELETE FROM stages;
 
 -- 2. Modify stages table
@@ -16,9 +21,22 @@ DELETE FROM stages;
 ALTER TABLE stages
   DROP COLUMN IF EXISTS competition_id,
   DROP COLUMN IF EXISTS stage_date,
-  ALTER COLUMN distance TYPE text USING distance::text,
   ALTER COLUMN stage_number SET DEFAULT 1;
 
+-- Change distance to text only if it isn't already
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'stages'
+      AND column_name = 'distance'
+      AND data_type != 'text'
+  ) THEN
+    ALTER TABLE stages ALTER COLUMN distance TYPE text USING distance::text;
+  END IF;
+END $$;
+
+-- Add discipline_id if missing, then make it required
+ALTER TABLE stages ADD COLUMN IF NOT EXISTS discipline_id uuid REFERENCES disciplines(id) ON DELETE CASCADE;
 ALTER TABLE stages ALTER COLUMN discipline_id SET NOT NULL;
 
 -- 3. Modify competition_matches
@@ -45,6 +63,7 @@ CREATE TABLE IF NOT EXISTS match_stages (
 -- RLS for match_stages: allow admins to write, authenticated users to read
 ALTER TABLE match_stages ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Admins can manage match_stages" ON match_stages;
 CREATE POLICY "Admins can manage match_stages"
   ON match_stages FOR ALL
   USING (
@@ -55,6 +74,7 @@ CREATE POLICY "Admins can manage match_stages"
     )
   );
 
+DROP POLICY IF EXISTS "Authenticated users can read match_stages" ON match_stages;
 CREATE POLICY "Authenticated users can read match_stages"
   ON match_stages FOR SELECT
   USING (auth.role() = 'authenticated');
