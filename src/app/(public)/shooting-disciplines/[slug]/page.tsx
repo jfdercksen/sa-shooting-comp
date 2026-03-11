@@ -1,9 +1,10 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { Calendar, Target, ArrowLeft, Trophy, Settings } from 'lucide-react'
+import { Calendar, Target, ArrowLeft, Trophy } from 'lucide-react'
 import { format } from 'date-fns'
 import type { Database } from '@/types/database'
+import StagesManager from '@/components/disciplines/StagesManager'
 
 type Discipline = Database['public']['Tables']['disciplines']['Row']
 type Competition = Database['public']['Tables']['competitions']['Row']
@@ -50,7 +51,7 @@ export default async function DisciplineDetailPage({
     .limit(5)
 
   // Fetch discipline stages
-  const { data: templates } = await supabase
+  const { data: stages } = await supabase
     .from('stages')
     .select('*')
     .eq('discipline_id', discipline.id)
@@ -106,13 +107,11 @@ export default async function DisciplineDetailPage({
           Back to Disciplines
         </Link>
         {isAdmin && (
-          <Link
-            href="/admin/disciplines"
-            className="inline-flex items-center px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            <Settings className="h-4 w-4 mr-1.5" />
-            Manage Stages
-          </Link>
+          <StagesManager
+            disciplineId={discipline.id}
+            disciplineName={discipline.name}
+            initialStages={stages ?? []}
+          />
         )}
       </div>
 
@@ -155,7 +154,7 @@ export default async function DisciplineDetailPage({
             )}
 
             {/* Stages */}
-            {templates && templates.length > 0 && (
+            {stages && stages.length > 0 && (
               <section className="bg-white rounded-lg shadow-md p-6">
                 <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
                   <Target className="mr-2 h-6 w-6 text-[#1e40af]" />
@@ -173,7 +172,7 @@ export default async function DisciplineDetailPage({
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {templates.map((stage) => (
+                      {stages.map((stage) => (
                         <tr key={stage.id} className="hover:bg-gray-50 border-b border-gray-100">
                           <td className="px-4 py-3 text-sm font-medium text-gray-900">{stage.stage_number}</td>
                           <td className="px-4 py-3 text-sm text-gray-700 font-semibold">{stage.name}</td>
