@@ -52,6 +52,15 @@ export default async function EventDetailPage({
     .eq('competition_id', id)
     .order('match_date', { ascending: true, nullsFirst: false })
 
+  // Fetch which matches belong to which disciplines (via match_stages)
+  const matchIds = matches?.map(m => m.id) || []
+  const { data: matchDisciplines } = matchIds.length > 0
+    ? await supabase
+        .from('match_stages')
+        .select('match_id, discipline_id')
+        .in('match_id', matchIds)
+    : { data: [] }
+
   // Count registrations
   const { count: registeredCount } = await supabase
     .from('registrations')
@@ -342,6 +351,7 @@ export default async function EventDetailPage({
                     competition={competition}
                     disciplines={disciplines}
                     matches={matches || []}
+                    matchDisciplines={matchDisciplines || []}
                   />
                 ) : (
                   <Link
