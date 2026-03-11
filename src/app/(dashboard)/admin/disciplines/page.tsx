@@ -444,7 +444,7 @@ export default function AdminDisciplinesPage() {
                           stage_number: disciplineStages.length + 1,
                           distance: null,
                           rounds: 10,
-                          sighters: 2,
+                          sighters: 0,
                           max_score: 5,
                         },
                       ])
