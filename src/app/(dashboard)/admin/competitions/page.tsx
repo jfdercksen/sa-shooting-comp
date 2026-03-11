@@ -528,7 +528,6 @@ export default function AdminCompetitionsPage() {
       setMatches(loadedMatches)
 
       // Fetch stages for all selected disciplines
-      const disciplineIds = compDisciplines?.map(cd => cd.discipline_id).filter((id): id is string => id !== null) || []
       if (disciplineIds.length > 0) {
         fetchStagesForDisciplines(disciplineIds)
       }
