@@ -496,6 +496,9 @@ export default function AdminCompetitionsPage() {
       // Populate disciplines
       const disciplineIds = compDisciplines?.map(cd => cd.discipline_id).filter((id): id is string => id !== null) || []
       setSelectedDisciplines(disciplineIds)
+      if (disciplineIds.length > 0) {
+        fetchStagesForDisciplines(disciplineIds)
+      }
 
       // Populate discipline fees
       const fees: Record<string, DisciplineFee> = {}
@@ -526,13 +529,6 @@ export default function AdminCompetitionsPage() {
         })),
       }))
       setMatches(loadedMatches)
-
-      // Fetch stages for all selected disciplines
-      const disciplineIds = compDisciplines?.map(cd => cd.discipline_id).filter((id): id is string => id !== null) || []
-      if (disciplineIds.length > 0) {
-        fetchStagesForDisciplines(disciplineIds)
-      }
-
       setEditingCompetitionId(competitionId)
       setShowForm(true)
     } catch (error: any) {
