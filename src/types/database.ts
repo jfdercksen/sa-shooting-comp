@@ -104,34 +104,34 @@ export type Database = {
         Row: {
           competition_id: string | null
           created_at: string | null
+          distance: string | null
           entry_fee: number
           id: string
           is_optional: boolean | null
           match_date: string | null
           match_name: string
-          match_type: Database["public"]["Enums"]["match_type"]
           max_entries: number | null
         }
         Insert: {
           competition_id?: string | null
           created_at?: string | null
+          distance?: string | null
           entry_fee: number
           id?: string
           is_optional?: boolean | null
           match_date?: string | null
           match_name: string
-          match_type: Database["public"]["Enums"]["match_type"]
           max_entries?: number | null
         }
         Update: {
           competition_id?: string | null
           created_at?: string | null
+          distance?: string | null
           entry_fee?: number
           id?: string
           is_optional?: boolean | null
           match_date?: string | null
           match_name?: string
-          match_type?: Database["public"]["Enums"]["match_type"]
           max_entries?: number | null
         }
         Relationships: [
@@ -140,6 +140,52 @@ export type Database = {
             columns: ["competition_id"]
             isOneToOne: false
             referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_stages: {
+        Row: {
+          created_at: string | null
+          discipline_id: string
+          id: string
+          match_id: string
+          stage_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          discipline_id: string
+          id?: string
+          match_id: string
+          stage_id: string
+        }
+        Update: {
+          created_at?: string | null
+          discipline_id?: string
+          id?: string
+          match_id?: string
+          stage_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_stages_discipline_id_fkey"
+            columns: ["discipline_id"]
+            isOneToOne: false
+            referencedRelation: "disciplines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_stages_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "competition_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_stages_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "stages"
             referencedColumns: ["id"]
           },
         ]
@@ -811,6 +857,7 @@ export type Database = {
           id: string
           is_dnf: boolean | null
           is_dq: boolean | null
+          match_id: string | null
           notes: string | null
           registration_id: string | null
           score: number
@@ -826,6 +873,7 @@ export type Database = {
           id?: string
           is_dnf?: boolean | null
           is_dq?: boolean | null
+          match_id?: string | null
           notes?: string | null
           registration_id?: string | null
           score: number
@@ -841,6 +889,7 @@ export type Database = {
           id?: string
           is_dnf?: boolean | null
           is_dq?: boolean | null
+          match_id?: string | null
           notes?: string | null
           registration_id?: string | null
           score?: number
@@ -853,6 +902,13 @@ export type Database = {
           x_count?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "scores_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "competition_matches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "scores_registration_id_fkey"
             columns: ["registration_id"]
@@ -917,49 +973,36 @@ export type Database = {
       }
       stages: {
         Row: {
-          competition_id: string | null
-          discipline_id: string | null
-          distance: number | null
+          discipline_id: string
+          distance: string | null
           id: string
           max_score: number | null
           name: string
           rounds: number | null
           sighters: number | null
-          stage_date: string | null
           stage_number: number
         }
         Insert: {
-          competition_id?: string | null
-          discipline_id?: string | null
-          distance?: number | null
+          discipline_id: string
+          distance?: string | null
           id?: string
           max_score?: number | null
           name: string
           rounds?: number | null
           sighters?: number | null
-          stage_date?: string | null
-          stage_number: number
+          stage_number?: number
         }
         Update: {
-          competition_id?: string | null
-          discipline_id?: string | null
-          distance?: number | null
+          discipline_id?: string
+          distance?: string | null
           id?: string
           max_score?: number | null
           name?: string
           rounds?: number | null
           sighters?: number | null
-          stage_date?: string | null
           stage_number?: number
         }
         Relationships: [
-          {
-            foreignKeyName: "stages_competition_id_fkey"
-            columns: ["competition_id"]
-            isOneToOne: false
-            referencedRelation: "competitions"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "stages_discipline_id_fkey"
             columns: ["discipline_id"]
@@ -1061,7 +1104,6 @@ export type Database = {
         | "Under_25"
         | "Veteran_60_plus"
         | "Veteran_70_plus"
-      match_type: "300M" | "600M" | "800M" | "900M"
       payment_status: "pending" | "paid" | "partial" | "refunded"
       registration_status:
         | "draft"
@@ -1211,7 +1253,6 @@ export const Constants = {
         "Veteran_60_plus",
         "Veteran_70_plus",
       ],
-      match_type: ["300M", "600M", "800M", "900M"],
       payment_status: ["pending", "paid", "partial", "refunded"],
       registration_status: [
         "draft",

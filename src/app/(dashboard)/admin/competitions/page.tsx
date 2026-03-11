@@ -2,10 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Trash2, Save, X, Calendar, MapPin, DollarSign, Settings, Target, List } from 'lucide-react'
+import { Plus, Trash2, Save, X, Calendar, MapPin, DollarSign, Settings } from 'lucide-react'
 import RichTextEditor from '@/components/forms/rich-text-editor'
 import { toast } from 'sonner'
-import Link from 'next/link'
 import type { Database } from '@/types/database'
 
 type Competition = Database['public']['Tables']['competitions']['Row']
@@ -14,15 +13,7 @@ type CompetitionUpdate = Database['public']['Tables']['competitions']['Update']
 type Discipline = Database['public']['Tables']['disciplines']['Row']
 type CompetitionDisciplineInsert = Database['public']['Tables']['competition_disciplines']['Insert']
 type CompetitionMatchInsert = Database['public']['Tables']['competition_matches']['Insert']
-type StageInsert = Database['public']['Tables']['stages']['Insert']
 type Stage = Database['public']['Tables']['stages']['Row']
-
-const MATCH_TYPES: string[] = [
-  '300M',
-  '600M',
-  '800M',
-  '900M',
-]
 
 interface DisciplineFee {
   disciplineId: string
@@ -32,24 +23,19 @@ interface DisciplineFee {
   maxEntries: number
 }
 
+interface MatchStageAssignment {
+  disciplineId: string
+  stageId: string | null
+}
+
 interface Match {
   id: string
-  matchType: string
+  distance: string
   matchName: string
   matchDate: string
   entryFee: number
   isOptional: boolean
-}
-
-interface StageForm {
-  id: string
-  name: string
-  stageNumber: number
-  distance: number | null
-  rounds: number | null
-  sighters: number | null
-  maxScore: number | null
-  stageDate: string | null
+  matchStages: MatchStageAssignment[]
 }
 
 export default function AdminCompetitionsPage() {
@@ -62,7 +48,7 @@ export default function AdminCompetitionsPage() {
   const [selectedDisciplines, setSelectedDisciplines] = useState<string[]>([])
   const [disciplineFees, setDisciplineFees] = useState<Record<string, DisciplineFee>>({})
   const [matches, setMatches] = useState<Match[]>([])
-  const [stages, setStages] = useState<StageForm[]>([])
+  const [disciplineStages, setDisciplineStages] = useState<Record<string, Stage[]>>({})
   const supabase = createClient()
 
   const [formData, setFormData] = useState<Partial<CompetitionInsert>>({
@@ -135,6 +121,26 @@ export default function AdminCompetitionsPage() {
     })
   }
 
+  const fetchStagesForDisciplines = async (disciplineIds: string[]) => {
+    if (disciplineIds.length === 0) return
+    const { data, error } = await supabase
+      .from('stages')
+      .select('*')
+      .in('discipline_id', disciplineIds)
+      .order('stage_number', { ascending: true })
+    if (error) {
+      console.error('Error fetching discipline stages:', error)
+      return
+    }
+    const map: Record<string, Stage[]> = {}
+    disciplineIds.forEach(id => { map[id] = [] })
+    ;(data || []).forEach(stage => {
+      if (!map[stage.discipline_id]) map[stage.discipline_id] = []
+      map[stage.discipline_id].push(stage)
+    })
+    setDisciplineStages(prev => ({ ...prev, ...map }))
+  }
+
   const handleDisciplineSelect = (disciplineId: string) => {
     if (selectedDisciplines.includes(disciplineId)) {
       setSelectedDisciplines(selectedDisciplines.filter((id) => id !== disciplineId))
@@ -153,6 +159,7 @@ export default function AdminCompetitionsPage() {
           maxEntries: 0,
         },
       })
+      fetchStagesForDisciplines([disciplineId])
     }
   }
 
@@ -171,11 +178,12 @@ export default function AdminCompetitionsPage() {
       ...matches,
       {
         id: `temp-${Date.now()}`,
-        matchType: '300M',
+        distance: '',
         matchName: '',
         matchDate: '',
         entryFee: 0,
         isOptional: false,
+        matchStages: selectedDisciplines.map(disciplineId => ({ disciplineId, stageId: null })),
       },
     ])
   }
@@ -190,33 +198,15 @@ export default function AdminCompetitionsPage() {
     )
   }
 
-  const addStage = () => {
-    const nextStageNumber = stages.length > 0 
-      ? Math.max(...stages.map(s => s.stageNumber)) + 1 
-      : 1
-    setStages([
-      ...stages,
-      {
-        id: `temp-${Date.now()}`,
-        name: `Stage ${nextStageNumber}`,
-        stageNumber: nextStageNumber,
-        distance: null,
-        rounds: 10,
-        sighters: null,
-        maxScore: null,
-        stageDate: null,
-      },
-    ])
-  }
-
-  const removeStage = (id: string) => {
-    setStages(stages.filter((s) => s.id !== id))
-  }
-
-  const updateStage = (id: string, field: keyof StageForm, value: any) => {
-    setStages(
-      stages.map((s) => (s.id === id ? { ...s, [field]: value } : s))
-    )
+  const updateMatchStage = (matchId: string, disciplineId: string, stageId: string | null) => {
+    setMatches(matches.map(m => {
+      if (m.id !== matchId) return m
+      const existing = m.matchStages.find(ms => ms.disciplineId === disciplineId)
+      if (existing) {
+        return { ...m, matchStages: m.matchStages.map(ms => ms.disciplineId === disciplineId ? { ...ms, stageId } : ms) }
+      }
+      return { ...m, matchStages: [...m.matchStages, { disciplineId, stageId }] }
+    }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -305,15 +295,8 @@ export default function AdminCompetitionsPage() {
           throw deleteMatchError
         }
 
-        const { error: deleteStageError } = await supabase
-          .from('stages')
-          .delete()
-          .eq('competition_id', competitionId)
-
-        if (deleteStageError) {
-          console.error('Error deleting competition stages:', deleteStageError)
-          throw deleteStageError
-        }
+        // Delete match_stages (cascades when matches are deleted, but be explicit)
+        // match_stages are deleted via ON DELETE CASCADE from competition_matches
       } else {
         // Create new competition
         const { data: competition, error: compError } = await supabase
@@ -351,61 +334,54 @@ export default function AdminCompetitionsPage() {
       // Create/update competition matches
       if (matches.length > 0) {
         const matchInserts: CompetitionMatchInsert[] = matches.map((match) => {
-          // If match has a real ID (starts with UUID pattern), include it for upsert
           const isExistingMatch = match.id && !match.id.startsWith('temp-')
           const insertData: CompetitionMatchInsert = {
             competition_id: competitionId,
-            match_type: match.matchType as Database['public']['Enums']['match_type'],
-            match_name: match.matchName || match.matchType,
+            distance: match.distance || null,
+            match_name: match.matchName || match.distance || 'Match',
             match_date: match.matchDate || null,
             entry_fee: match.entryFee,
             is_optional: match.isOptional || false,
           }
-          
-          // Only include id if it's an existing match (for upsert)
           if (isExistingMatch) {
             insertData.id = match.id
           }
-          
           return insertData
         })
 
-        console.log('Inserting matches:', matchInserts)
-
-        const { error: matchError } = await supabase
+        const { data: savedMatches, error: matchError } = await supabase
           .from('competition_matches')
           .insert(matchInserts)
+          .select()
 
         if (matchError) {
           console.error('Error inserting competition matches:', matchError)
-          console.error('Match inserts:', matchInserts)
           throw matchError
         }
-      }
 
-      // Create/update competition stages
-      if (stages.length > 0) {
-        const stageInserts: StageInsert[] = stages.map((stage) => ({
-          competition_id: competitionId,
-          name: stage.name,
-          stage_number: stage.stageNumber,
-          distance: stage.distance || null,
-          rounds: stage.rounds || null,
-          sighters: stage.sighters || null,
-          max_score: stage.maxScore || null,
-          stage_date: stage.stageDate || null,
-        }))
+        // Build match_stages inserts using saved match IDs
+        const matchStageInserts: { match_id: string; stage_id: string; discipline_id: string }[] = []
+        savedMatches?.forEach((savedMatch, index) => {
+          const original = matches[index]
+          original.matchStages.forEach(ms => {
+            if (ms.stageId) {
+              matchStageInserts.push({
+                match_id: savedMatch.id,
+                stage_id: ms.stageId,
+                discipline_id: ms.disciplineId,
+              })
+            }
+          })
+        })
 
-        console.log('Inserting stages:', stageInserts)
-
-        const { error: stageError } = await supabase
-          .from('stages')
-          .insert(stageInserts)
-
-        if (stageError) {
-          console.error('Error inserting competition stages:', stageError)
-          console.error('Stage inserts:', stageInserts)
-          throw stageError
+        if (matchStageInserts.length > 0) {
+          const { error: msError } = await supabase
+            .from('match_stages')
+            .insert(matchStageInserts)
+          if (msError) {
+            console.error('Error inserting match_stages:', msError)
+            throw msError
+          }
         }
       }
 
@@ -478,19 +454,18 @@ export default function AdminCompetitionsPage() {
         .select('*')
         .eq('competition_id', competitionId)
 
-      // Load competition matches
+      // Load competition matches with their stage assignments
       const { data: compMatches } = await supabase
         .from('competition_matches')
-        .select('*')
+        .select(`
+          *,
+          match_stages (
+            discipline_id,
+            stage_id
+          )
+        `)
         .eq('competition_id', competitionId)
         .order('match_date', { ascending: true, nullsFirst: true })
-
-      // Load competition stages
-      const { data: compStages } = await supabase
-        .from('stages')
-        .select('*')
-        .eq('competition_id', competitionId)
-        .order('stage_number', { ascending: true })
 
       // Populate form data
       setFormData({
@@ -538,28 +513,25 @@ export default function AdminCompetitionsPage() {
       setDisciplineFees(fees)
 
       // Populate matches
-      const loadedMatches: Match[] = compMatches?.map(cm => ({
-        id: cm.id, // Use real ID from database
-        matchType: cm.match_type || '300M', // Default to 300M if null
+      const loadedMatches: Match[] = (compMatches as any[] || []).map(cm => ({
+        id: cm.id,
+        distance: cm.distance || '',
         matchName: cm.match_name,
         matchDate: cm.match_date ? cm.match_date.split('T')[0] : '',
         entryFee: cm.entry_fee,
         isOptional: cm.is_optional || false,
-      })) || []
+        matchStages: (cm.match_stages || []).map((ms: any) => ({
+          disciplineId: ms.discipline_id,
+          stageId: ms.stage_id,
+        })),
+      }))
       setMatches(loadedMatches)
 
-      // Populate stages
-      const loadedStages: StageForm[] = compStages?.map((cs: Stage) => ({
-        id: cs.id,
-        name: cs.name,
-        stageNumber: cs.stage_number,
-        distance: cs.distance,
-        rounds: cs.rounds,
-        sighters: cs.sighters,
-        maxScore: cs.max_score,
-        stageDate: cs.stage_date ? cs.stage_date.split('T')[0] : null,
-      })) || []
-      setStages(loadedStages)
+      // Fetch stages for all selected disciplines
+      const disciplineIds = compDisciplines?.map(cd => cd.discipline_id).filter((id): id is string => id !== null) || []
+      if (disciplineIds.length > 0) {
+        fetchStagesForDisciplines(disciplineIds)
+      }
 
       setEditingCompetitionId(competitionId)
       setShowForm(true)
@@ -593,7 +565,7 @@ export default function AdminCompetitionsPage() {
       setSelectedDisciplines([])
       setDisciplineFees({})
       setMatches([])
-      setStages([])
+      setDisciplineStages({})
       setEditingCompetitionId(null)
   }
 
@@ -707,14 +679,6 @@ export default function AdminCompetitionsPage() {
                             >
                               View
                             </a>
-                            <Link
-                              href={`/admin/competitions/${competition.id}/stages`}
-                              className="text-[#1e40af] hover:text-[#1e3a8a] flex items-center"
-                              title="Manage Stages"
-                            >
-                              <Target className="h-4 w-4 mr-1" />
-                              Stages
-                            </Link>
                             <button
                               onClick={() => loadCompetitionForEdit(competition.id)}
                               className="text-[#1e40af] hover:text-[#1e3a8a]"
@@ -1032,32 +996,27 @@ export default function AdminCompetitionsPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Match Type *
-                            </label>
-                            <select
-                              value={match.matchType}
-                              onChange={(e) =>
-                                updateMatch(match.id, 'matchType', e.target.value)
-                              }
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                            >
-                              {MATCH_TYPES.map((type) => (
-                                <option key={type} value={type}>
-                                  {type}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Match Name
+                              Match Name *
                             </label>
                             <input
                               type="text"
                               value={match.matchName}
                               onChange={(e) => updateMatch(match.id, 'matchName', e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                              placeholder="Custom match name (optional)"
+                              placeholder="e.g. Match 1"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Distance
+                            </label>
+                            <input
+                              type="text"
+                              value={match.distance}
+                              onChange={(e) => updateMatch(match.id, 'distance', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                              placeholder="e.g. 300m, Long Range"
                             />
                           </div>
                           <div>
@@ -1098,140 +1057,46 @@ export default function AdminCompetitionsPage() {
                             </label>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
 
-              {/* Stages */}
-              <section>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-bold text-gray-900 flex items-center">
-                    <Target className="h-5 w-5 mr-2 text-[#1e40af]" />
-                    Stages
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={addStage}
-                    className="flex items-center px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Stage
-                  </button>
-                </div>
-
-                {stages.length === 0 ? (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <p className="text-yellow-800 text-sm">
-                      ⚠️ <strong>No stages added.</strong> Stages are required for shooters to enter scores. Click "Add Stage" to add stages.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {stages.map((stage) => (
-                      <div key={stage.id} className="border border-gray-200 rounded-lg p-4">
-                        <div className="flex items-start justify-between mb-4">
-                          <h4 className="font-semibold text-gray-900">Stage {stage.stageNumber}</h4>
-                          <button
-                            type="button"
-                            onClick={() => removeStage(stage.id)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Stage Name *
-                            </label>
-                            <input
-                              type="text"
-                              value={stage.name}
-                              onChange={(e) => updateStage(stage.id, 'name', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                              placeholder="e.g., Stage 1 - 300M"
-                              required
-                            />
+                        {/* Stage assignments per discipline */}
+                        {selectedDisciplines.length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-gray-100">
+                            <h5 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">
+                              Stage per Discipline
+                            </h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {selectedDisciplines.map(disciplineId => {
+                                const discipline = disciplines.find(d => d.id === disciplineId)
+                                const stages = disciplineStages[disciplineId] || []
+                                const assignment = match.matchStages.find(ms => ms.disciplineId === disciplineId)
+                                return (
+                                  <div key={disciplineId} className="flex items-center gap-2">
+                                    <div
+                                      className="w-3 h-3 rounded flex-shrink-0"
+                                      style={{ backgroundColor: discipline?.color || '#1e40af' }}
+                                    />
+                                    <span className="text-sm text-gray-700 w-24 flex-shrink-0">{discipline?.name}</span>
+                                    <select
+                                      value={assignment?.stageId || ''}
+                                      onChange={(e) => updateMatchStage(match.id, disciplineId, e.target.value || null)}
+                                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                    >
+                                      <option value="">— no stage —</option>
+                                      {stages.map(stage => (
+                                        <option key={stage.id} value={stage.id}>
+                                          {stage.name}{stage.distance ? ` (${stage.distance})` : ''} — {stage.sighters ?? 0}+{stage.rounds ?? 0}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    {stages.length === 0 && (
+                                      <span className="text-xs text-amber-600">No stages defined</span>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
                           </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Stage Number *
-                            </label>
-                            <input
-                              type="number"
-                              value={stage.stageNumber}
-                              onChange={(e) => updateStage(stage.id, 'stageNumber', parseInt(e.target.value) || 1)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                              min="1"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Distance (meters)
-                            </label>
-                            <input
-                              type="number"
-                              value={stage.distance || ''}
-                              onChange={(e) => updateStage(stage.id, 'distance', e.target.value ? parseInt(e.target.value) : null)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                              min="0"
-                              placeholder="e.g., 300"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Rounds
-                            </label>
-                            <input
-                              type="number"
-                              value={stage.rounds || ''}
-                              onChange={(e) => updateStage(stage.id, 'rounds', e.target.value ? parseInt(e.target.value) : null)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                              min="1"
-                              placeholder="e.g., 10"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Sighters
-                            </label>
-                            <input
-                              type="number"
-                              value={stage.sighters || ''}
-                              onChange={(e) => updateStage(stage.id, 'sighters', e.target.value ? parseInt(e.target.value) : null)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                              min="0"
-                              placeholder="e.g., 2"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Max Score
-                            </label>
-                            <input
-                              type="number"
-                              value={stage.maxScore || ''}
-                              onChange={(e) => updateStage(stage.id, 'maxScore', e.target.value ? parseInt(e.target.value) : null)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                              min="0"
-                              placeholder="e.g., 50"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Stage Date
-                            </label>
-                            <input
-                              type="date"
-                              value={stage.stageDate || ''}
-                              onChange={(e) => updateStage(stage.id, 'stageDate', e.target.value || null)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                            />
-                          </div>
-                        </div>
+                        )}
                       </div>
                     ))}
                   </div>

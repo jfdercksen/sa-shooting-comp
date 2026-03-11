@@ -49,28 +49,11 @@ export default async function DisciplineDetailPage({
     .order('competitions.start_date', { ascending: true })
     .limit(5)
 
-  // Fetch discipline stages (templates)
+  // Fetch discipline stages
   const { data: templates } = await supabase
     .from('stages')
     .select('*')
     .eq('discipline_id', discipline.id)
-    .is('competition_id', null)
-    .order('stage_number', { ascending: true })
-
-  // Fetch stages from upcoming competitions for this discipline
-  const upcomingCompetitionIds = upcomingCompetitions?.map((cd: any) => cd.competition_id) || []
-  
-  const { data: competitionStages } = await supabase
-    .from('stages')
-    .select(`
-      *,
-      competitions (
-        name,
-        start_date
-      )
-    `)
-    .eq('discipline_id', discipline.id)
-    .in('competition_id', upcomingCompetitionIds)
     .order('stage_number', { ascending: true })
 
   // Fetch recent results (you'll need to implement results table query based on your schema)
@@ -150,12 +133,12 @@ export default async function DisciplineDetailPage({
               </section>
             )}
 
-            {/* Default Stages / Templates */}
+            {/* Stages */}
             {templates && templates.length > 0 && (
               <section className="bg-white rounded-lg shadow-md p-6">
                 <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
                   <Target className="mr-2 h-6 w-6 text-[#1e40af]" />
-                  Standard Course of Fire (Templates)
+                  Stages
                 </h2>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
@@ -163,7 +146,7 @@ export default async function DisciplineDetailPage({
                       <tr>
                         <th className="px-4 py-3 text-left">#</th>
                         <th className="px-4 py-3 text-left">Stage Name</th>
-                        <th className="px-4 py-3 text-center">Dist (m)</th>
+                        <th className="px-4 py-3 text-center">Distance</th>
                         <th className="px-4 py-3 text-center">Rounds</th>
                         <th className="px-4 py-3 text-center">Sighters</th>
                       </tr>
@@ -173,60 +156,13 @@ export default async function DisciplineDetailPage({
                         <tr key={stage.id} className="hover:bg-gray-50 border-b border-gray-100">
                           <td className="px-4 py-3 text-sm font-medium text-gray-900">{stage.stage_number}</td>
                           <td className="px-4 py-3 text-sm text-gray-700 font-semibold">{stage.name}</td>
-                          <td className="px-4 py-3 text-sm text-center text-gray-600">{stage.distance}m</td>
+                          <td className="px-4 py-3 text-sm text-center text-gray-600">{stage.distance}</td>
                           <td className="px-4 py-3 text-sm text-center text-gray-600">{stage.rounds}</td>
                           <td className="px-4 py-3 text-sm text-center text-gray-600">{stage.sighters}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </div>
-              </section>
-            )}
-
-            {/* Stages from Upcoming Competitions */}
-            {competitionStages && competitionStages.length > 0 && (
-              <section className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-                  <Calendar className="mr-2 h-6 w-6 text-[#1e40af]" />
-                  Upcoming Competition Stages
-                </h2>
-                <div className="space-y-6">
-                  {/* Group by competition */}
-                  {Array.from(new Set(competitionStages.map(s => s.competition_id))).map(compId => {
-                    const compStages = competitionStages.filter(s => s.competition_id === compId)
-                    const competitionName = compStages[0]?.competitions?.name || 'Competition'
-                    
-                    return (
-                      <div key={compId as string} className="border border-gray-100 rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 px-4 py-2 border-b border-gray-100">
-                          <h3 className="font-bold text-gray-900">{competitionName}</h3>
-                        </div>
-                        <div className="overflow-x-auto">
-                          <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-white text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                              <tr>
-                                <th className="px-4 py-2 text-left">#</th>
-                                <th className="px-4 py-2 text-left">Name</th>
-                                <th className="px-4 py-2 text-center">Dist</th>
-                                <th className="px-4 py-2 text-center">Rounds</th>
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200 text-sm">
-                              {compStages.map(stage => (
-                                <tr key={stage.id}>
-                                  <td className="px-4 py-2 text-gray-500">{stage.stage_number}</td>
-                                  <td className="px-4 py-2 font-medium text-gray-700">{stage.name}</td>
-                                  <td className="px-4 py-2 text-center text-gray-600">{stage.distance}m</td>
-                                  <td className="px-4 py-2 text-center text-gray-600">{stage.rounds}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )
-                  })}
                 </div>
               </section>
             )}

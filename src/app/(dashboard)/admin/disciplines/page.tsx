@@ -60,7 +60,6 @@ export default function AdminDisciplinesPage() {
       .from('stages')
       .select('*')
       .eq('discipline_id', disciplineId)
-      .is('competition_id', null)
       .order('stage_number', { ascending: true })
 
     if (error) {
@@ -126,24 +125,21 @@ export default function AdminDisciplinesPage() {
 
       // Handle stages
       if (disciplineId) {
-        // Simple approach: delete all and re-insert for now, or compare. 
-        // Given it's a small number of stages, this is easiest for a "template".
+        // Delete all and re-insert
         await supabase
           .from('stages')
           .delete()
           .eq('discipline_id', disciplineId)
-          .is('competition_id', null)
 
         if (disciplineStages.length > 0) {
           const stageInserts = disciplineStages.map((stage, index) => ({
             name: stage.name || `Stage ${index + 1}`,
             stage_number: stage.stage_number || index + 1,
-            distance: stage.distance || null,
+            distance: stage.distance ? String(stage.distance) : null,
             rounds: stage.rounds || 10,
             sighters: stage.sighters || 2,
             max_score: stage.max_score || 5,
             discipline_id: disciplineId,
-            competition_id: null,
           }))
 
           const { error: stageError } = await supabase.from('stages').insert(stageInserts)
@@ -434,10 +430,10 @@ export default function AdminDisciplinesPage() {
                 />
               </div>
 
-              {/* Default Stages Section */}
+              {/* Stages Section */}
               <div className="border-t border-gray-200 pt-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-gray-900">Default Stages (Templates)</h3>
+                  <h3 className="text-lg font-bold text-gray-900">Stages</h3>
                   <button
                     type="button"
                     onClick={() => {
@@ -446,7 +442,7 @@ export default function AdminDisciplinesPage() {
                         {
                           name: '',
                           stage_number: disciplineStages.length + 1,
-                          distance: 300,
+                          distance: null,
                           rounds: 10,
                           sighters: 2,
                           max_score: 5,
@@ -456,19 +452,19 @@ export default function AdminDisciplinesPage() {
                     className="flex items-center px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm"
                   >
                     <Plus className="h-4 w-4 mr-1" />
-                    Add Stage Template
+                    Add Stage
                   </button>
                 </div>
 
                 <div className="space-y-4">
                   {disciplineStages.length === 0 ? (
-                    <p className="text-sm text-gray-500 italic">No default stages defined for this discipline.</p>
+                    <p className="text-sm text-gray-500 italic">No stages defined for this discipline yet.</p>
                   ) : (
                     <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                       <div className="grid grid-cols-12 gap-4 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                         <div className="col-span-1 text-center">#</div>
-                        <div className="col-span-4">Name</div>
-                        <div className="col-span-2 text-center">Dist (m)</div>
+                        <div className="col-span-3">Name</div>
+                        <div className="col-span-3 text-center">Distance</div>
                         <div className="col-span-1 text-center">Rounds</div>
                         <div className="col-span-1 text-center">Sight</div>
                         <div className="col-span-2 text-center">Max/Shot</div>
@@ -489,7 +485,7 @@ export default function AdminDisciplinesPage() {
                                 className="w-full text-center py-1 border border-gray-300 rounded text-sm"
                               />
                             </div>
-                            <div className="col-span-4">
+                            <div className="col-span-3">
                               <input
                                 type="text"
                                 value={stage.name || ''}
@@ -502,16 +498,17 @@ export default function AdminDisciplinesPage() {
                                 className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                               />
                             </div>
-                            <div className="col-span-2">
+                            <div className="col-span-3">
                               <input
-                                type="number"
-                                value={stage.distance || 0}
+                                type="text"
+                                value={stage.distance != null ? String(stage.distance) : ''}
                                 onChange={(e) => {
                                   const newStages = [...disciplineStages]
-                                  newStages[index].distance = parseInt(e.target.value) || 0
+                                  ;(newStages[index] as any).distance = e.target.value
                                   setDisciplineStages(newStages)
                                 }}
-                                className="w-full text-center py-1 border border-gray-300 rounded text-sm"
+                                placeholder="e.g. 300m"
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                               />
                             </div>
                             <div className="col-span-1">

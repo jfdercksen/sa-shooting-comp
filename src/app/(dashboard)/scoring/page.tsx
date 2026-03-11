@@ -13,6 +13,12 @@ type Score = Database['public']['Tables']['scores']['Row']
 type Competition = Database['public']['Tables']['competitions']['Row']
 type Discipline = Database['public']['Tables']['disciplines']['Row']
 
+interface ScoringStage extends Stage {
+  matchId: string
+  matchName: string
+  matchDistance: string | null
+}
+
 interface RoundScore {
   round: number
   score: number
@@ -163,7 +169,7 @@ const normalizeStageScoreForStage = (stage: Stage, incoming?: Partial<StageScore
 
 export default function ScoringPage() {
   const [registrations, setRegistrations] = useState<any[]>([])
-  const [stages, setStages] = useState<Record<string, Stage[]>>({})
+  const [scoringStages, setScoringStages] = useState<Record<string, ScoringStage[]>>({})
   const [submittedScores, setSubmittedScores] = useState<Score[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedRegistration, setSelectedRegistration] = useState<string | null>(null)
@@ -233,36 +239,54 @@ export default function ScoringPage() {
     if (regs) {
       setRegistrations(regs)
 
-      // Fetch stages for each registration's competition in parallel
-      const stagesMap: Record<string, Stage[]> = {}
-      
-      // Get unique competition IDs
+      // Fetch matches with stage assignments for each competition
       const uniqueCompetitionIds = [...new Set(
         regs
-          .map(reg => reg.competition_id)
+          .map((reg: any) => reg.competition_id)
           .filter((id): id is string => id !== null)
       )]
 
-      // Fetch all stages in parallel
-      const stagePromises = uniqueCompetitionIds.map(competitionId =>
+      const matchPromises = uniqueCompetitionIds.map(competitionId =>
         supabase
-          .from('stages')
-          .select('*')
+          .from('competition_matches')
+          .select(`
+            id,
+            match_name,
+            distance,
+            match_date,
+            match_stages (
+              discipline_id,
+              stages (*)
+            )
+          `)
           .eq('competition_id', competitionId)
-          .order('stage_number', { ascending: true })
-          .then(result => ({ competitionId, stages: result.data || [] }))
+          .order('match_date', { ascending: true })
+          .then(result => ({ competitionId, matches: result.data || [] }))
       )
 
-      const stageResults = await Promise.all(stagePromises)
-      
-      // Build stages map
-      stageResults.forEach(({ competitionId, stages }) => {
-        if (stages.length > 0) {
-          stagesMap[competitionId] = stages
+      const matchResults = await Promise.all(matchPromises)
+
+      const stagesMap: Record<string, ScoringStage[]> = {}
+      matchResults.forEach(({ competitionId, matches }) => {
+        const scoringStagesList: ScoringStage[] = []
+        ;(matches as any[]).forEach(match => {
+          ;(match.match_stages || []).forEach((ms: any) => {
+            if (ms.stages) {
+              scoringStagesList.push({
+                ...ms.stages,
+                matchId: match.id,
+                matchName: match.match_name,
+                matchDistance: match.distance,
+              })
+            }
+          })
+        })
+        if (scoringStagesList.length > 0) {
+          stagesMap[competitionId] = scoringStagesList
         }
       })
-      
-      setStages(stagesMap)
+
+      setScoringStages(stagesMap)
     }
 
     // Fetch submitted scores for this user
@@ -319,7 +343,9 @@ export default function ScoringPage() {
       if (draft) {
         try {
           const parsed = JSON.parse(draft) as Record<string, Partial<StageScore>>
-          const compStages = stages[reg.competition_id] || []
+          const compStages = (scoringStages[reg.competition_id] || []).filter(
+            (s: ScoringStage) => s.discipline_id === reg.discipline_id
+          )
           const normalizedScores: Record<string, StageScore> = {}
           compStages.forEach((stage) => {
             normalizedScores[stage.id] = normalizeStageScoreForStage(stage, parsed?.[stage.id])
@@ -339,7 +365,9 @@ export default function ScoringPage() {
   const initializeScores = (registrationId: string) => {
     const reg = registrations.find((r: any) => r.id === registrationId)
     if (reg) {
-      const compStages = stages[reg.competition_id] || []
+      const compStages = (scoringStages[reg.competition_id] || []).filter(
+        (s: ScoringStage) => s.discipline_id === reg.discipline_id
+      )
       const newScores: Record<string, StageScore> = {}
 
       compStages.forEach((stage) => {
@@ -496,7 +524,7 @@ export default function ScoringPage() {
       if (!reg) throw new Error('Registration not found')
 
       // If stageId is provided, submit only that stage, otherwise submit all stages
-      const stagesToSubmit: Array<[string, StageScore]> = stageId 
+      const stagesToSubmit: Array<[string, StageScore]> = stageId
         ? (stageScores[stageId] ? [[stageId, stageScores[stageId]] as [string, StageScore]] : [])
         : Object.entries(stageScores).filter((entry): entry is [string, StageScore] => !!entry[1])
 
@@ -512,14 +540,15 @@ export default function ScoringPage() {
         )
         const totals = calculateTotals(stageScore.rounds, scoringWindow)
 
-        // Check if score already exists for this stage
+        // Check if score already exists for this stage in this match
         const existingScore = submittedScores.find(
-          (s: any) => s.registration_id === selectedRegistration && s.stage_id === sid
+          (s: any) => s.registration_id === selectedRegistration && s.stage_id === sid && s.match_id === currentStage?.matchId
         )
 
         const scoreData = {
           registration_id: selectedRegistration,
           stage_id: sid,
+          match_id: currentStage?.matchId || null,
           score: stageScore.isDNF || stageScore.isDQ ? 0 : totals.totalScore,
           x_count: 0,
           v_count: totals.vCount,
@@ -641,9 +670,9 @@ export default function ScoringPage() {
   const selectedReg = selectedRegistration
     ? registrations.find((r: any) => r.id === selectedRegistration)
     : null
-  const selectedStages = selectedReg 
-    ? (stages[selectedReg.competition_id] || []).filter(stage => 
-        !stage.discipline_id || stage.discipline_id === selectedReg.discipline_id
+  const selectedStages: ScoringStage[] = selectedReg
+    ? (scoringStages[selectedReg.competition_id] || []).filter(
+        (s: ScoringStage) => s.discipline_id === selectedReg.discipline_id
       )
     : []
 
@@ -762,9 +791,9 @@ export default function ScoringPage() {
           {/* Stages List */}
           <div className="space-y-4">
             {selectedStages.map((stage) => {
-              // Check if score already exists for this stage
+              // Check if score already exists for this stage in this match
               const existingScore = submittedScores.find(
-                (s: any) => s.registration_id === selectedRegistration && s.stage_id === stage.id
+                (s: any) => s.registration_id === selectedRegistration && s.stage_id === stage.id && s.match_id === stage.matchId
               )
               const isVerified = !!existingScore?.verified_at
               const isPending = existingScore && !existingScore.verified_at
@@ -812,7 +841,13 @@ export default function ScoringPage() {
                       )}
                     </div>
                     <div className="flex flex-wrap gap-4 text-sm text-gray-600 mt-1">
-                      {stage.distance && <span>Distance: {stage.distance}m</span>}
+                      {(stage as ScoringStage).matchName && (
+                        <span className="font-medium text-[#1e40af]">
+                          {(stage as ScoringStage).matchName}
+                          {(stage as ScoringStage).matchDistance ? ` — ${(stage as ScoringStage).matchDistance}` : ''}
+                        </span>
+                      )}
+                      {stage.distance && <span>Distance: {stage.distance}</span>}
                       {stage.rounds && <span>Rounds: {stage.rounds}</span>}
                       {stage.max_score && <span>Max Score: {stage.max_score}</span>}
                     </div>
