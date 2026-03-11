@@ -32,6 +32,11 @@ export default function AdminDisciplinesPage() {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [disciplineStages, setDisciplineStages] = useState<Partial<Stage>[]>([])
   const [loadingStages, setLoadingStages] = useState(false)
+  // Stages modal (separate from discipline edit form)
+  const [showStagesModal, setShowStagesModal] = useState(false)
+  const [stagesDiscipline, setStagesDiscipline] = useState<Discipline | null>(null)
+  const [modalStages, setModalStages] = useState<Partial<Stage>[]>([])
+  const [savingStages, setSavingStages] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
@@ -69,6 +74,51 @@ export default function AdminDisciplinesPage() {
       setDisciplineStages(data || [])
     }
     setLoadingStages(false)
+  }
+
+  const handleManageStages = async (discipline: Discipline) => {
+    setStagesDiscipline(discipline)
+    setShowStagesModal(true)
+    setModalStages([])
+    const { data, error } = await supabase
+      .from('stages')
+      .select('*')
+      .eq('discipline_id', discipline.id)
+      .order('stage_number', { ascending: true })
+    if (error) {
+      toast.error('Error fetching stages')
+    } else {
+      setModalStages(data || [])
+    }
+  }
+
+  const handleSaveStages = async () => {
+    if (!stagesDiscipline) return
+    setSavingStages(true)
+    try {
+      await supabase.from('stages').delete().eq('discipline_id', stagesDiscipline.id)
+      if (modalStages.length > 0) {
+        const inserts = modalStages.map((s, i) => ({
+          discipline_id: stagesDiscipline.id,
+          name: s.name || `Stage ${i + 1}`,
+          stage_number: s.stage_number || i + 1,
+          distance: s.distance ? String(s.distance) : null,
+          rounds: s.rounds ?? null,
+          sighters: s.sighters ?? null,
+          max_score: s.max_score ?? null,
+        }))
+        const { error } = await supabase.from('stages').insert(inserts)
+        if (error) throw error
+      }
+      toast.success('Stages saved')
+      setShowStagesModal(false)
+      setStagesDiscipline(null)
+      setModalStages([])
+    } catch (error: any) {
+      toast.error(error.message || 'Error saving stages')
+    } finally {
+      setSavingStages(false)
+    }
   }
 
   const generateSlug = (name: string) => {
@@ -665,7 +715,7 @@ export default function AdminDisciplinesPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
-                      onClick={() => handleEdit(discipline)}
+                      onClick={() => handleManageStages(discipline)}
                       className="flex items-center text-[#1e40af] hover:text-[#1e3a8a] bg-blue-50 px-2 py-1 rounded border border-blue-200"
                     >
                       <Target className="h-4 w-4 mr-1" />
@@ -694,6 +744,143 @@ export default function AdminDisciplinesPage() {
           </table>
         </div>
       </div>
+
+      {/* Stages Modal */}
+      {showStagesModal && stagesDiscipline && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+            <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Stages</h2>
+                <p className="text-sm text-gray-500 mt-1">{stagesDiscipline.name}</p>
+              </div>
+              <button
+                onClick={() => { setShowStagesModal(false); setStagesDiscipline(null); setModalStages([]) }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {modalStages.length === 0 && (
+                <p className="text-sm text-gray-500 italic">No stages yet. Click "Add Stage" to create one.</p>
+              )}
+              {modalStages.map((stage, index) => (
+                <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold text-gray-700">Stage {index + 1}</h4>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const s = [...modalStages]
+                        s.splice(index, 1)
+                        setModalStages(s)
+                      }}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Stage Name *</label>
+                      <input
+                        type="text"
+                        value={stage.name || ''}
+                        onChange={(e) => { const s = [...modalStages]; s[index] = { ...s[index], name: e.target.value }; setModalStages(s) }}
+                        placeholder="e.g. 300m Deliberate"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Stage Number</label>
+                      <input
+                        type="number"
+                        value={stage.stage_number || index + 1}
+                        onChange={(e) => { const s = [...modalStages]; s[index] = { ...s[index], stage_number: parseInt(e.target.value) || index + 1 }; setModalStages(s) }}
+                        min="1"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Distance</label>
+                      <input
+                        type="text"
+                        value={stage.distance != null ? String(stage.distance) : ''}
+                        onChange={(e) => { const s = [...modalStages]; (s[index] as any).distance = e.target.value; setModalStages(s) }}
+                        placeholder="e.g. 300m, Long Range"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Rounds (counting shots)</label>
+                      <input
+                        type="number"
+                        value={stage.rounds ?? ''}
+                        onChange={(e) => { const s = [...modalStages]; s[index] = { ...s[index], rounds: e.target.value ? parseInt(e.target.value) : null }; setModalStages(s) }}
+                        min="1"
+                        placeholder="e.g. 10"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Sighters (practice shots)</label>
+                      <input
+                        type="number"
+                        value={stage.sighters ?? ''}
+                        onChange={(e) => { const s = [...modalStages]; s[index] = { ...s[index], sighters: e.target.value ? parseInt(e.target.value) : null }; setModalStages(s) }}
+                        min="0"
+                        placeholder="e.g. 2"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Max Score per Shot</label>
+                      <input
+                        type="number"
+                        value={stage.max_score ?? ''}
+                        onChange={(e) => { const s = [...modalStages]; s[index] = { ...s[index], max_score: e.target.value ? parseInt(e.target.value) : null }; setModalStages(s) }}
+                        min="1"
+                        placeholder="e.g. 5"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setModalStages([...modalStages, { name: '', stage_number: modalStages.length + 1, distance: null, rounds: 10, sighters: 0, max_score: 5 }])}
+                className="flex items-center px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Stage
+              </button>
+            </div>
+
+            <div className="border-t border-gray-200 p-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => { setShowStagesModal(false); setStagesDiscipline(null); setModalStages([]) }}
+                className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveStages}
+                disabled={savingStages}
+                className="flex items-center px-6 py-2 bg-[#1e40af] text-white rounded-lg hover:bg-[#1e3a8a] transition-colors disabled:opacity-50"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                {savingStages ? 'Saving...' : 'Save Stages'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
