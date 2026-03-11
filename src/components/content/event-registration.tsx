@@ -11,7 +11,6 @@ import type { Database } from '@/types/database'
 
 type Competition = Database['public']['Tables']['competitions']['Row']
 type CompetitionMatch = Database['public']['Tables']['competition_matches']['Row']
-type MatchType = Database['public']['Enums']['match_type']
 
 interface Discipline {
   id: string
@@ -44,7 +43,7 @@ export default function EventRegistration({ competition, disciplines, matches }:
 
   const [formData, setFormData] = useState({
     disciplineId: '',
-    selectedMatches: [] as MatchType[],
+    selectedMatches: [] as string[],
     allMatches: false,
     entryType: 'individual' as 'individual' | 'team',
     teamId: '',
@@ -133,10 +132,10 @@ export default function EventRegistration({ competition, disciplines, matches }:
         total += matchFees
       }
     } else {
-      formData.selectedMatches.forEach((matchType) => {
-        const match = matches.find((m) => m.match_type === matchType)
+      formData.selectedMatches.forEach((matchId) => {
+        const match = matches.find((m) => m.id === matchId)
         if (match) {
-          breakdown.push({ label: match.match_name || matchType, amount: match.entry_fee })
+          breakdown.push({ label: match.match_name || matchId, amount: match.entry_fee })
           total += match.entry_fee
         }
       })
@@ -255,7 +254,7 @@ export default function EventRegistration({ competition, disciplines, matches }:
       if (registration && !formData.allMatches && formData.selectedMatches.length > 0) {
         // Find match IDs for selected match types
         const selectedMatchIds = matches
-          .filter(m => formData.selectedMatches.includes(m.match_type))
+          .filter(m => formData.selectedMatches.includes(m.id))
           .map(m => m.id)
 
         if (selectedMatchIds.length > 0) {
@@ -474,7 +473,7 @@ export default function EventRegistration({ competition, disciplines, matches }:
                         <label
                           key={match.id}
                           className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-                            formData.selectedMatches.includes(match.match_type)
+                            formData.selectedMatches.includes(match.id)
                               ? 'border-[#1e40af] bg-blue-50'
                               : 'border-gray-200 hover:border-gray-300'
                           }`}
@@ -482,17 +481,17 @@ export default function EventRegistration({ competition, disciplines, matches }:
                           <div className="flex items-center">
                             <input
                               type="checkbox"
-                              checked={formData.selectedMatches.includes(match.match_type)}
+                              checked={formData.selectedMatches.includes(match.id)}
                               onChange={(e) => {
                                 if (e.target.checked) {
                                   setFormData({
                                     ...formData,
-                                    selectedMatches: [...formData.selectedMatches, match.match_type],
+                                    selectedMatches: [...formData.selectedMatches, match.id],
                                   })
                                 } else {
                                   setFormData({
                                     ...formData,
-                                    selectedMatches: formData.selectedMatches.filter((m) => m !== match.match_type),
+                                    selectedMatches: formData.selectedMatches.filter((m) => m !== match.id),
                                   })
                                 }
                               }}
@@ -501,7 +500,7 @@ export default function EventRegistration({ competition, disciplines, matches }:
                             <div>
                               <div className="font-semibold text-gray-900">{match.match_name}</div>
                               <div className="text-sm text-gray-600">
-                                {match.match_type}
+                                {match.distance}
                                 {match.match_date && ` • ${format(new Date(match.match_date), 'MMM d')}`}
                                 {match.is_optional && ' • Optional'}
                               </div>
