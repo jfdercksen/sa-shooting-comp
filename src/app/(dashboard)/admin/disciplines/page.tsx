@@ -11,7 +11,6 @@ type Discipline = Database['public']['Tables']['disciplines']['Row']
 type DisciplineInsert = Database['public']['Tables']['disciplines']['Insert']
 type DisciplineUpdate = Database['public']['Tables']['disciplines']['Update']
 type Stage = Database['public']['Tables']['stages']['Row']
-type StageInsert = Database['public']['Tables']['stages']['Insert']
 
 export default function AdminDisciplinesPage() {
   const [disciplines, setDisciplines] = useState<Discipline[]>([])
@@ -30,8 +29,6 @@ export default function AdminDisciplinesPage() {
     is_active: true,
   })
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
-  const [disciplineStages, setDisciplineStages] = useState<Partial<Stage>[]>([])
-  const [loadingStages, setLoadingStages] = useState(false)
   // Stages modal (separate from discipline edit form)
   const [showStagesModal, setShowStagesModal] = useState(false)
   const [stagesDiscipline, setStagesDiscipline] = useState<Discipline | null>(null)
@@ -57,23 +54,6 @@ export default function AdminDisciplinesPage() {
       setDisciplines(data || [])
     }
     setLoading(false)
-  }
-
-  const fetchDisciplineStages = async (disciplineId: string) => {
-    setLoadingStages(true)
-    const { data, error } = await supabase
-      .from('stages')
-      .select('*')
-      .eq('discipline_id', disciplineId)
-      .order('stage_number', { ascending: true })
-
-    if (error) {
-      toast.error('Error fetching stages')
-      console.error(error)
-    } else {
-      setDisciplineStages(data || [])
-    }
-    setLoadingStages(false)
   }
 
   const handleManageStages = async (discipline: Discipline) => {
@@ -173,30 +153,6 @@ export default function AdminDisciplinesPage() {
         disciplineId = data.id
       }
 
-      // Handle stages
-      if (disciplineId) {
-        // Delete all and re-insert
-        await supabase
-          .from('stages')
-          .delete()
-          .eq('discipline_id', disciplineId)
-
-        if (disciplineStages.length > 0) {
-          const stageInserts = disciplineStages.map((stage, index) => ({
-            name: stage.name || `Stage ${index + 1}`,
-            stage_number: stage.stage_number || index + 1,
-            distance: stage.distance ? String(stage.distance) : null,
-            rounds: stage.rounds || 10,
-            sighters: stage.sighters || 2,
-            max_score: stage.max_score || 5,
-            discipline_id: disciplineId,
-          }))
-
-          const { error: stageError } = await supabase.from('stages').insert(stageInserts)
-          if (stageError) throw stageError
-        }
-      }
-
       toast.success(editingId ? 'Discipline updated successfully' : 'Discipline created successfully')
       setShowForm(false)
       setEditingId(null)
@@ -211,7 +167,6 @@ export default function AdminDisciplinesPage() {
         display_order: disciplines.length,
         is_active: true,
       })
-      setDisciplineStages([])
       fetchDisciplines()
     } catch (error: any) {
       toast.error(error.message || 'Error saving discipline')
@@ -478,147 +433,6 @@ export default function AdminDisciplinesPage() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
                   placeholder="Enter rules summary..."
                 />
-              </div>
-
-              {/* Stages Section */}
-              <div className="border-t border-gray-200 pt-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-gray-900">Stages</h3>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDisciplineStages([
-                        ...disciplineStages,
-                        {
-                          name: '',
-                          stage_number: disciplineStages.length + 1,
-                          distance: null,
-                          rounds: 10,
-                          sighters: 0,
-                          max_score: 5,
-                        },
-                      ])
-                    }}
-                    className="flex items-center px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Stage
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  {disciplineStages.length === 0 ? (
-                    <p className="text-sm text-gray-500 italic">No stages defined for this discipline yet.</p>
-                  ) : (
-                    disciplineStages.map((stage, index) => (
-                      <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="font-semibold text-gray-700">Stage {index + 1}</h4>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const newStages = [...disciplineStages]
-                              newStages.splice(index, 1)
-                              setDisciplineStages(newStages)
-                            }}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Stage Name *</label>
-                            <input
-                              type="text"
-                              value={stage.name || ''}
-                              onChange={(e) => {
-                                const newStages = [...disciplineStages]
-                                newStages[index].name = e.target.value
-                                setDisciplineStages(newStages)
-                              }}
-                              placeholder="e.g. 300m Deliberate"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Stage Number</label>
-                            <input
-                              type="number"
-                              value={stage.stage_number || index + 1}
-                              onChange={(e) => {
-                                const newStages = [...disciplineStages]
-                                newStages[index].stage_number = parseInt(e.target.value) || index + 1
-                                setDisciplineStages(newStages)
-                              }}
-                              min="1"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Distance</label>
-                            <input
-                              type="text"
-                              value={stage.distance != null ? String(stage.distance) : ''}
-                              onChange={(e) => {
-                                const newStages = [...disciplineStages]
-                                ;(newStages[index] as any).distance = e.target.value
-                                setDisciplineStages(newStages)
-                              }}
-                              placeholder="e.g. 300m, Long Range"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Rounds (counting shots)</label>
-                            <input
-                              type="number"
-                              value={stage.rounds ?? ''}
-                              onChange={(e) => {
-                                const newStages = [...disciplineStages]
-                                newStages[index].rounds = e.target.value ? parseInt(e.target.value) : null
-                                setDisciplineStages(newStages)
-                              }}
-                              min="1"
-                              placeholder="e.g. 10"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Sighters (practice shots)</label>
-                            <input
-                              type="number"
-                              value={stage.sighters ?? ''}
-                              onChange={(e) => {
-                                const newStages = [...disciplineStages]
-                                newStages[index].sighters = e.target.value ? parseInt(e.target.value) : null
-                                setDisciplineStages(newStages)
-                              }}
-                              min="0"
-                              placeholder="e.g. 2"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Max Score per Shot</label>
-                            <input
-                              type="number"
-                              value={stage.max_score ?? ''}
-                              onChange={(e) => {
-                                const newStages = [...disciplineStages]
-                                newStages[index].max_score = e.target.value ? parseInt(e.target.value) : null
-                                setDisciplineStages(newStages)
-                              }}
-                              min="1"
-                              placeholder="e.g. 5"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
               </div>
 
               <div className="flex justify-end gap-4 pt-4 border-t border-gray-200">
