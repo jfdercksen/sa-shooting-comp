@@ -276,7 +276,6 @@ export default function AdminDisciplinesPage() {
               display_order: disciplines.length,
               is_active: true,
             })
-            setDisciplineStages([])
           }}
           className="flex items-center px-4 py-2 bg-[#1e40af] text-white rounded-lg hover:bg-[#1e3a8a] transition-colors"
         >
