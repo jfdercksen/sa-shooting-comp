@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { Calendar, Target, ArrowLeft, Trophy } from 'lucide-react'
+import { Calendar, Target, ArrowLeft, Trophy, Settings } from 'lucide-react'
 import { format } from 'date-fns'
 import type { Database } from '@/types/database'
 
@@ -56,6 +56,18 @@ export default async function DisciplineDetailPage({
     .eq('discipline_id', discipline.id)
     .order('stage_number', { ascending: true })
 
+  // Check if current user is admin
+  const { data: { user } } = await supabase.auth.getUser()
+  let isAdmin = false
+  if (user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin'
+  }
+
   // Fetch recent results (you'll need to implement results table query based on your schema)
   // For now, we'll show a placeholder
 
@@ -85,7 +97,7 @@ export default async function DisciplineDetailPage({
       </div>
 
       {/* Back Button */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 flex items-center justify-between">
         <Link
           href="/shooting-disciplines"
           className="inline-flex items-center text-[#1e40af] hover:text-[#1e3a8a] font-semibold"
@@ -93,6 +105,15 @@ export default async function DisciplineDetailPage({
           <ArrowLeft className="mr-2 h-5 w-5" />
           Back to Disciplines
         </Link>
+        {isAdmin && (
+          <Link
+            href="/admin/disciplines"
+            className="inline-flex items-center px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-700 transition-colors"
+          >
+            <Settings className="h-4 w-4 mr-1.5" />
+            Manage Stages
+          </Link>
+        )}
       </div>
 
       {/* Main Content */}
