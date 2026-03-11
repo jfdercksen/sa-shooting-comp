@@ -188,7 +188,6 @@ export default function AdminDisciplinesPage() {
     })
     setEditingId(discipline.id)
     setShowForm(true)
-    fetchDisciplineStages(discipline.id)
   }
 
   const handleDelete = async (id: string) => {
