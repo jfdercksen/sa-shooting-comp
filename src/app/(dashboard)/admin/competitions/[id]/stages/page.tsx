@@ -12,6 +12,8 @@ import type { Database } from '@/types/database'
 type Stage = Database['public']['Tables']['stages']['Row']
 type StageInsert = Database['public']['Tables']['stages']['Insert']
 type Competition = Database['public']['Tables']['competitions']['Row']
+type Discipline = Database['public']['Tables']['disciplines']['Row']
+
 interface StageForm {
   id: string | null
   name: string
@@ -21,6 +23,7 @@ interface StageForm {
   sighters: number | null
   max_score: number | null
   stage_date: string | null
+  discipline_id: string | null
 }
 
 const DISTANCES = [300, 500, 600, 900, 1000]
@@ -40,6 +43,7 @@ export default function CompetitionStagesPage() {
 
   const [competition, setCompetition] = useState<Competition | null>(null)
   const [stages, setStages] = useState<Stage[]>([])
+  const [disciplines, setDisciplines] = useState<Discipline[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
@@ -53,6 +57,7 @@ export default function CompetitionStagesPage() {
     sighters: 2,
     max_score: 5,
     stage_date: null,
+    discipline_id: null,
   })
 
   useEffect(() => {
@@ -92,6 +97,22 @@ export default function CompetitionStagesPage() {
       } else {
         setStages(stagesData || [])
       }
+
+      // Fetch disciplines for this competition
+      const { data: compDisciplines, error: discError } = await supabase
+        .from('competition_disciplines')
+        .select(`
+          discipline_id,
+          disciplines (*)
+        `)
+        .eq('competition_id', competitionId)
+
+      if (discError) {
+        console.error('Error fetching competition disciplines:', discError)
+      } else {
+        const discList = compDisciplines?.map(cd => cd.disciplines).filter((d): d is Discipline => !!d) || []
+        setDisciplines(discList)
+      }
     } catch (error: any) {
       console.error('Error fetching data:', error)
       toast.error('Error loading data')
@@ -105,16 +126,44 @@ export default function CompetitionStagesPage() {
 
     setSaving(true)
     try {
-      const stageInserts: StageInsert[] = DEFAULT_STAGES.map((stage) => ({
-        competition_id: competitionId,
-        name: stage.name,
-        stage_number: stage.stage_number,
-        distance: stage.distance,
-        rounds: stage.rounds,
-        sighters: stage.sighters,
-        max_score: stage.max_score,
-        stage_date: null,
-      }))
+      // 1. Fetch templates for the disciplines in this competition
+      const disciplineIds = disciplines.map(d => d.id)
+      
+      const { data: templates, error: templateError } = await supabase
+        .from('stages')
+        .select('*')
+        .in('discipline_id', disciplineIds)
+        .is('competition_id', null)
+
+      let stageInserts: StageInsert[] = []
+
+      if (templates && templates.length > 0) {
+        // Use custom templates
+        stageInserts = templates.map((stage) => ({
+          competition_id: competitionId,
+          name: stage.name,
+          stage_number: stage.stage_number,
+          distance: stage.distance,
+          rounds: stage.rounds,
+          sighters: stage.sighters,
+          max_score: stage.max_score,
+          stage_date: null,
+          discipline_id: stage.discipline_id,
+        }))
+      } else {
+        // Fallback to old hardcoded defaults (if no templates found)
+        stageInserts = DEFAULT_STAGES.map((stage) => ({
+          competition_id: competitionId,
+          name: stage.name,
+          stage_number: stage.stage_number,
+          distance: stage.distance,
+          rounds: stage.rounds,
+          sighters: stage.sighters,
+          max_score: stage.max_score,
+          stage_date: null,
+          discipline_id: null,
+        }))
+      }
 
       const { error } = await supabase.from('stages').insert(stageInserts)
 
@@ -140,6 +189,7 @@ export default function CompetitionStagesPage() {
       sighters: stage.sighters,
       max_score: stage.max_score,
       stage_date: stage.stage_date ? stage.stage_date.split('T')[0] : null,
+      discipline_id: stage.discipline_id,
     })
     setEditingStageId(stage.id)
     setShowForm(true)
@@ -183,6 +233,7 @@ export default function CompetitionStagesPage() {
         sighters: formData.sighters || null,
         max_score: formData.max_score || null,
         stage_date: formData.stage_date || null,
+        discipline_id: formData.discipline_id || null,
       }
 
       if (editingStageId) {
@@ -222,6 +273,7 @@ export default function CompetitionStagesPage() {
       sighters: 2,
       max_score: 5,
       stage_date: null,
+      discipline_id: null,
     })
     setEditingStageId(null)
     setShowForm(false)
@@ -339,6 +391,9 @@ export default function CompetitionStagesPage() {
                     Date
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Discipline
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -367,6 +422,13 @@ export default function CompetitionStagesPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-600">
                         {stage.stage_date ? format(new Date(stage.stage_date), 'MMM d, yyyy') : '-'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-600">
+                        {stage.discipline_id 
+                          ? disciplines.find(d => d.id === stage.discipline_id)?.name || 'Unknown'
+                          : 'General (All)'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -507,6 +569,24 @@ export default function CompetitionStagesPage() {
                     onChange={(e) => setFormData({ ...formData, stage_date: e.target.value || null })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Discipline Assignment
+                  </label>
+                  <select
+                    value={formData.discipline_id || ''}
+                    onChange={(e) => setFormData({ ...formData, discipline_id: e.target.value || null })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                  >
+                    <option value="">General (Shared by all)</option>
+                    {disciplines.map((disc) => (
+                      <option key={disc.id} value={disc.id}>
+                        {disc.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

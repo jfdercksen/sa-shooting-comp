@@ -641,7 +641,11 @@ export default function ScoringPage() {
   const selectedReg = selectedRegistration
     ? registrations.find((r: any) => r.id === selectedRegistration)
     : null
-  const selectedStages = selectedReg ? stages[selectedReg.competition_id] || [] : []
+  const selectedStages = selectedReg 
+    ? (stages[selectedReg.competition_id] || []).filter(stage => 
+        !stage.discipline_id || stage.discipline_id === selectedReg.discipline_id
+      )
+    : []
 
   return (
     <div className="p-6 space-y-6">

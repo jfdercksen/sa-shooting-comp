@@ -10,6 +10,8 @@ import { toast } from 'sonner'
 type Discipline = Database['public']['Tables']['disciplines']['Row']
 type DisciplineInsert = Database['public']['Tables']['disciplines']['Insert']
 type DisciplineUpdate = Database['public']['Tables']['disciplines']['Update']
+type Stage = Database['public']['Tables']['stages']['Row']
+type StageInsert = Database['public']['Tables']['stages']['Insert']
 
 export default function AdminDisciplinesPage() {
   const [disciplines, setDisciplines] = useState<Discipline[]>([])
@@ -28,6 +30,8 @@ export default function AdminDisciplinesPage() {
     is_active: true,
   })
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [disciplineStages, setDisciplineStages] = useState<Partial<Stage>[]>([])
+  const [loadingStages, setLoadingStages] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
@@ -48,6 +52,24 @@ export default function AdminDisciplinesPage() {
       setDisciplines(data || [])
     }
     setLoading(false)
+  }
+
+  const fetchDisciplineStages = async (disciplineId: string) => {
+    setLoadingStages(true)
+    const { data, error } = await supabase
+      .from('stages')
+      .select('*')
+      .eq('discipline_id', disciplineId)
+      .is('competition_id', null)
+      .order('stage_number', { ascending: true })
+
+    if (error) {
+      toast.error('Error fetching stages')
+      console.error(error)
+    } else {
+      setDisciplineStages(data || [])
+    }
+    setLoadingStages(false)
   }
 
   const generateSlug = (name: string) => {
@@ -74,6 +96,8 @@ export default function AdminDisciplinesPage() {
     }
 
     try {
+      let disciplineId = editingId
+
       if (editingId) {
         // Update
         const { error } = await supabase
@@ -85,20 +109,49 @@ export default function AdminDisciplinesPage() {
           .eq('id', editingId)
 
         if (error) throw error
-        toast.success('Discipline updated successfully')
       } else {
         // Create
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('disciplines')
           .insert({
             ...formData,
             slug: formData.slug || generateSlug(formData.name!),
           } as DisciplineInsert)
+          .select()
+          .single()
 
         if (error) throw error
-        toast.success('Discipline created successfully')
+        disciplineId = data.id
       }
 
+      // Handle stages
+      if (disciplineId) {
+        // Simple approach: delete all and re-insert for now, or compare. 
+        // Given it's a small number of stages, this is easiest for a "template".
+        await supabase
+          .from('stages')
+          .delete()
+          .eq('discipline_id', disciplineId)
+          .is('competition_id', null)
+
+        if (disciplineStages.length > 0) {
+          const stageInserts = disciplineStages.map((stage, index) => ({
+            name: stage.name || `Stage ${index + 1}`,
+            stage_number: stage.stage_number || index + 1,
+            distance: stage.distance || null,
+            rounds: stage.rounds || 10,
+            sighters: stage.sighters || 2,
+            max_score: stage.max_score || 5,
+            discipline_id: disciplineId,
+            competition_id: null,
+          }))
+
+          const { error: stageError } = await supabase.from('stages').insert(stageInserts)
+          if (stageError) throw stageError
+        }
+      }
+
+      toast.success(editingId ? 'Discipline updated successfully' : 'Discipline created successfully')
       setShowForm(false)
       setEditingId(null)
       setFormData({
@@ -112,6 +165,7 @@ export default function AdminDisciplinesPage() {
         display_order: disciplines.length,
         is_active: true,
       })
+      setDisciplineStages([])
       fetchDisciplines()
     } catch (error: any) {
       toast.error(error.message || 'Error saving discipline')
@@ -133,6 +187,7 @@ export default function AdminDisciplinesPage() {
     })
     setEditingId(discipline.id)
     setShowForm(true)
+    fetchDisciplineStages(discipline.id)
   }
 
   const handleDelete = async (id: string) => {
@@ -221,12 +276,18 @@ export default function AdminDisciplinesPage() {
               display_order: disciplines.length,
               is_active: true,
             })
+            setDisciplineStages([])
           }}
           className="flex items-center px-4 py-2 bg-[#1e40af] text-white rounded-lg hover:bg-[#1e3a8a] transition-colors"
         >
           <Plus className="h-5 w-5 mr-2" />
           Add Discipline
         </button>
+      </div>
+
+      {/* Helper for stage management */}
+      <div className="hidden">
+        {/* Placeholder for future expansion */}
       </div>
 
       {/* Form Modal */}
@@ -371,6 +432,143 @@ export default function AdminDisciplinesPage() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
                   placeholder="Enter rules summary..."
                 />
+              </div>
+
+              {/* Default Stages Section */}
+              <div className="border-t border-gray-200 pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900">Default Stages (Templates)</h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDisciplineStages([
+                        ...disciplineStages,
+                        {
+                          name: '',
+                          stage_number: disciplineStages.length + 1,
+                          distance: 300,
+                          rounds: 10,
+                          sighters: 2,
+                          max_score: 5,
+                        },
+                      ])
+                    }}
+                    className="flex items-center px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Stage Template
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {disciplineStages.length === 0 ? (
+                    <p className="text-sm text-gray-500 italic">No default stages defined for this discipline.</p>
+                  ) : (
+                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                      <div className="grid grid-cols-12 gap-4 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        <div className="col-span-1 text-center">#</div>
+                        <div className="col-span-4">Name</div>
+                        <div className="col-span-2 text-center">Dist (m)</div>
+                        <div className="col-span-1 text-center">Rounds</div>
+                        <div className="col-span-1 text-center">Sight</div>
+                        <div className="col-span-2 text-center">Max/Shot</div>
+                        <div className="col-span-1"></div>
+                      </div>
+                      <div className="space-y-2">
+                        {disciplineStages.map((stage, index) => (
+                          <div key={index} className="grid grid-cols-12 gap-4 items-center">
+                            <div className="col-span-1">
+                              <input
+                                type="number"
+                                value={stage.stage_number || index + 1}
+                                onChange={(e) => {
+                                  const newStages = [...disciplineStages]
+                                  newStages[index].stage_number = parseInt(e.target.value) || index + 1
+                                  setDisciplineStages(newStages)
+                                }}
+                                className="w-full text-center py-1 border border-gray-300 rounded text-sm"
+                              />
+                            </div>
+                            <div className="col-span-4">
+                              <input
+                                type="text"
+                                value={stage.name || ''}
+                                onChange={(e) => {
+                                  const newStages = [...disciplineStages]
+                                  newStages[index].name = e.target.value
+                                  setDisciplineStages(newStages)
+                                }}
+                                placeholder="Stage name"
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <input
+                                type="number"
+                                value={stage.distance || 0}
+                                onChange={(e) => {
+                                  const newStages = [...disciplineStages]
+                                  newStages[index].distance = parseInt(e.target.value) || 0
+                                  setDisciplineStages(newStages)
+                                }}
+                                className="w-full text-center py-1 border border-gray-300 rounded text-sm"
+                              />
+                            </div>
+                            <div className="col-span-1">
+                              <input
+                                type="number"
+                                value={stage.rounds || 0}
+                                onChange={(e) => {
+                                  const newStages = [...disciplineStages]
+                                  newStages[index].rounds = parseInt(e.target.value) || 0
+                                  setDisciplineStages(newStages)
+                                }}
+                                className="w-full text-center py-1 border border-gray-300 rounded text-sm"
+                              />
+                            </div>
+                            <div className="col-span-1">
+                              <input
+                                type="number"
+                                value={stage.sighters || 0}
+                                onChange={(e) => {
+                                  const newStages = [...disciplineStages]
+                                  newStages[index].sighters = parseInt(e.target.value) || 0
+                                  setDisciplineStages(newStages)
+                                }}
+                                className="w-full text-center py-1 border border-gray-300 rounded text-sm"
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <input
+                                type="number"
+                                value={stage.max_score || 0}
+                                onChange={(e) => {
+                                  const newStages = [...disciplineStages]
+                                  newStages[index].max_score = parseInt(e.target.value) || 0
+                                  setDisciplineStages(newStages)
+                                }}
+                                className="w-full text-center py-1 border border-gray-300 rounded text-sm"
+                              />
+                            </div>
+                            <div className="col-span-1 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newStages = [...disciplineStages]
+                                  newStages.splice(index, 1)
+                                  setDisciplineStages(newStages)
+                                }}
+                                className="text-red-600 hover:text-red-800 p-1"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex justify-end gap-4 pt-4 border-t border-gray-200">

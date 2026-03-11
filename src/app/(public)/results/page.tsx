@@ -152,11 +152,20 @@ export default function ResultsPage() {
   const fetchStages = async () => {
     if (!selectedCompetition) return
 
-    const { data: compStages } = await supabase
+    let query = supabase
       .from('stages')
       .select('*')
       .eq('competition_id', selectedCompetition)
-      .order('stage_number', { ascending: true })
+
+    if (selectedDiscipline) {
+      // Filter stages that are either general OR match the selected discipline
+      // However, Supabase query builder doesn't easily support OR with filters on different columns 
+      // followed by other filters without some nesting. 
+      // Given the small number of stages, we can filter in JS or use an 'or' filter string.
+      query = query.or(`discipline_id.is.null,discipline_id.eq.${selectedDiscipline}`)
+    }
+
+    const { data: compStages, error } = await query.order('stage_number', { ascending: true })
 
     if (compStages) {
       setStages(compStages)
