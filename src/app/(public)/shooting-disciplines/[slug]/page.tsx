@@ -7,6 +7,7 @@ import type { Database } from '@/types/database'
 
 type Discipline = Database['public']['Tables']['disciplines']['Row']
 type Competition = Database['public']['Tables']['competitions']['Row']
+type Stage = Database['public']['Tables']['stages']['Row']
 
 export default async function DisciplineDetailPage({
   params,
@@ -47,6 +48,14 @@ export default async function DisciplineDetailPage({
     .eq('competitions.is_active', true)
     .order('competitions.start_date', { ascending: true })
     .limit(5)
+
+  // Fetch discipline stages (templates)
+  const { data: stages } = await supabase
+    .from('stages')
+    .select('*')
+    .eq('discipline_id', discipline.id)
+    .is('competition_id', null)
+    .order('stage_number', { ascending: true })
 
   // Fetch recent results (you'll need to implement results table query based on your schema)
   // For now, we'll show a placeholder
@@ -122,6 +131,46 @@ export default async function DisciplineDetailPage({
                   className="prose prose-lg max-w-none text-gray-700"
                   dangerouslySetInnerHTML={{ __html: discipline.rules_summary }}
                 />
+              </section>
+            )}
+
+            {/* Stages / Course of Fire */}
+            {stages && stages.length > 0 && (
+              <section className="bg-white rounded-lg shadow-md p-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+                  <Target className="mr-2 h-6 w-6 text-[#1e40af]" />
+                  Default Stages (Course of Fire)
+                </h2>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-4 py-3 text-left">#</th>
+                        <th className="px-4 py-3 text-left">Stage Name</th>
+                        <th className="px-4 py-3 text-center">Dist (m)</th>
+                        <th className="px-4 py-3 text-center">Rounds</th>
+                        <th className="px-4 py-3 text-center">Sighters</th>
+                        <th className="px-4 py-3 text-center">Max Score</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {stages.map((stage) => (
+                        <tr key={stage.id} className="hover:bg-gray-50 border-b border-gray-100">
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{stage.stage_number}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700 font-semibold">{stage.name}</td>
+                          <td className="px-4 py-3 text-sm text-center text-gray-600">{stage.distance}m</td>
+                          <td className="px-4 py-3 text-sm text-center text-gray-600">{stage.rounds}</td>
+                          <td className="px-4 py-3 text-sm text-center text-gray-600">{stage.sighters}</td>
+                          <td className="px-4 py-3 text-sm text-center text-gray-600 font-medium">10.0</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="mt-4 p-4 bg-blue-50 border-l-4 border-blue-500 text-sm text-blue-700">
+                    <p className="font-semibold mb-1">Note:</p>
+                    <p>These are the default stages for this discipline. Specific competitions may vary the course of fire.</p>
+                  </div>
+                </div>
               </section>
             )}
           </div>

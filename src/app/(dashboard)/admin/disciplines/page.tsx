@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Edit, Trash2, GripVertical, Save, X } from 'lucide-react'
+import { Plus, Edit, Trash2, GripVertical, Save, X, Target } from 'lucide-react'
 import RichTextEditor from '@/components/forms/rich-text-editor'
 import type { Database } from '@/types/database'
 import { toast } from 'sonner'
@@ -616,6 +616,9 @@ export default function AdminDisciplinesPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Order
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Stages
+                </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -659,6 +662,15 @@ export default function AdminDisciplinesPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {discipline.display_order ?? index}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => handleEdit(discipline)}
+                      className="flex items-center text-[#1e40af] hover:text-[#1e3a8a] bg-blue-50 px-2 py-1 rounded border border-blue-200"
+                    >
+                      <Target className="h-4 w-4 mr-1" />
+                      Manage Stages
+                    </button>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end gap-2">
