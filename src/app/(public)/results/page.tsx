@@ -32,6 +32,7 @@ interface AggregatedResult {
   totalV: number
   hasDNF: boolean
   hasDQ: boolean
+  hasUnverified: boolean  // true if any scores are still pending
 }
 
 export default function ResultsPage() {
@@ -107,12 +108,11 @@ export default function ResultsPage() {
     console.log('[ResultsPage] fetchCompetitions: Starting...')
     const startTime = Date.now()
     try {
-      // Fetch competitions that have verified scores
+      // Fetch competitions that have any scores (pending or verified)
       console.log('[ResultsPage] fetchCompetitions: Fetching scores...')
       const { data: scores } = await supabase
         .from('scores')
         .select('registrations(competition_id)')
-        .not('verified_at', 'is', null)
 
       const competitionIds = [
         ...new Set(
@@ -152,20 +152,31 @@ export default function ResultsPage() {
   const fetchStages = async () => {
     if (!selectedCompetition) return
 
+    // Stages now belong to disciplines — get discipline IDs for this competition first
+    const { data: compDiscs } = await supabase
+      .from('competition_disciplines')
+      .select('discipline_id')
+      .eq('competition_id', selectedCompetition)
+
+    const disciplineIds = (compDiscs || [])
+      .map((cd: any) => cd.discipline_id)
+      .filter(Boolean)
+
+    if (disciplineIds.length === 0) {
+      setStages([])
+      return
+    }
+
     let query = supabase
       .from('stages')
       .select('*')
-      .eq('competition_id', selectedCompetition)
+      .in('discipline_id', disciplineIds)
 
     if (selectedDiscipline) {
-      // Filter stages that are either general OR match the selected discipline
-      // However, Supabase query builder doesn't easily support OR with filters on different columns 
-      // followed by other filters without some nesting. 
-      // Given the small number of stages, we can filter in JS or use an 'or' filter string.
-      query = query.or(`discipline_id.is.null,discipline_id.eq.${selectedDiscipline}`)
+      query = query.eq('discipline_id', selectedDiscipline)
     }
 
-    const { data: compStages, error } = await query.order('stage_number', { ascending: true })
+    const { data: compStages } = await query.order('stage_number', { ascending: true })
 
     if (compStages) {
       setStages(compStages)
@@ -487,7 +498,7 @@ export default function ResultsPage() {
   const fetchResultsManual = async () => {
     if (!selectedCompetition) return
 
-    // Fetch all verified scores for the competition
+    // Fetch ALL scores (verified + pending) for the competition so we can show live standings
     const { data: scoresData } = await supabase
       .from('scores')
       .select(`
@@ -522,7 +533,6 @@ export default function ResultsPage() {
         )
       `)
       .eq('registrations.competition_id', selectedCompetition)
-      .not('verified_at', 'is', null)
 
     if (!scoresData) {
       setLoading(false)
@@ -566,7 +576,13 @@ export default function ResultsPage() {
           totalV: 0,
           hasDNF: false,
           hasDQ: false,
+          hasUnverified: false,
         }
+      }
+
+      // Track if any score is still pending verification
+      if (!score.verified_at) {
+        aggregated[regId].hasUnverified = true
       }
 
       const stageNum = score.stages?.stage_number || 0
@@ -746,7 +762,7 @@ export default function ResultsPage() {
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">Competition Results</h1>
-          <p className="text-lg text-gray-600">View verified competition results</p>
+          <p className="text-lg text-gray-600">Live standings — includes pending scores until verified by admin</p>
         </div>
       </div>
 
@@ -1136,9 +1152,16 @@ export default function ResultsPage() {
                               ) : result.hasDQ ? (
                                 <span className="text-sm font-semibold text-red-600">DQ</span>
                               ) : (
-                                <span className="text-sm font-bold text-gray-900">
-                                  {result.totalScore}
-                                </span>
+                                <div className="flex flex-col items-end gap-0.5">
+                                  <span className="text-sm font-bold text-gray-900">
+                                    {result.totalScore}
+                                  </span>
+                                  {result.hasUnverified && (
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 font-medium">
+                                      Provisional
+                                    </span>
+                                  )}
+                                </div>
                               )}
                             </td>
                             <td className="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-900">
