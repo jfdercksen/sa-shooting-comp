@@ -987,7 +987,7 @@ export default function ScoringPage() {
                                       disabled={isVerified}
                                       className={`w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent ${isVerified ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                     >
-                                      {[0, 1, 2, 3, 4, 5].map((val) => (
+                                      {Array.from({ length: (stage.max_score ?? 5) + 1 }, (_, i) => i).map((val) => (
                                         <option key={val} value={val}>
                                           {val}
                                         </option>
