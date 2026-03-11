@@ -6,25 +6,21 @@
 
 -- 1. Clean all existing stage and score data (clean slate)
 DELETE FROM scores;
--- match_stages may not exist yet on first run; ignore the error
-DO $$ BEGIN
-  DELETE FROM match_stages;
-EXCEPTION WHEN undefined_table THEN NULL;
-END $$;
 DELETE FROM stages;
 
 -- 2. Modify stages table
 --    - Remove competition_id (stages now belong only to disciplines)
 --    - Remove stage_date (no longer needed on stages)
---    - Change distance from integer to text (free-form, e.g. "300m", "Long Range")
---    - Make discipline_id required
+--    - Change distance to text (free-form, e.g. "300m", "Long Range")
+--    - Make discipline_id required (NOT NULL)
 ALTER TABLE stages
   DROP COLUMN IF EXISTS competition_id,
   DROP COLUMN IF EXISTS stage_date,
   ALTER COLUMN stage_number SET DEFAULT 1;
 
 -- Change distance to text only if it isn't already
-DO $$ BEGIN
+DO $$
+BEGIN
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'stages'
@@ -35,22 +31,19 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- Add discipline_id if missing, then make it required
+-- Add discipline_id if it doesn't exist yet (safe no-op if already there)
 ALTER TABLE stages ADD COLUMN IF NOT EXISTS discipline_id uuid REFERENCES disciplines(id) ON DELETE CASCADE;
+
+-- Now make discipline_id required
 ALTER TABLE stages ALTER COLUMN discipline_id SET NOT NULL;
 
 -- 3. Modify competition_matches
---    - Drop match_type enum column
---    - Add free-form distance text column
-ALTER TABLE competition_matches
-  ADD COLUMN IF NOT EXISTS distance text;
-
-ALTER TABLE competition_matches
-  DROP COLUMN IF EXISTS match_type;
+--    - Drop match_type enum column (safe if already dropped)
+--    - Add free-form distance text column (safe if already exists)
+ALTER TABLE competition_matches ADD COLUMN IF NOT EXISTS distance text;
+ALTER TABLE competition_matches DROP COLUMN IF EXISTS match_type;
 
 -- 4. Create match_stages join table
---    Links a match to a stage for a specific discipline.
---    UNIQUE(match_id, discipline_id) enforces one stage per discipline per match.
 CREATE TABLE IF NOT EXISTS match_stages (
   id            uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   match_id      uuid NOT NULL REFERENCES competition_matches(id) ON DELETE CASCADE,
@@ -60,7 +53,7 @@ CREATE TABLE IF NOT EXISTS match_stages (
   UNIQUE(match_id, discipline_id)
 );
 
--- RLS for match_stages: allow admins to write, authenticated users to read
+-- RLS for match_stages
 ALTER TABLE match_stages ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Admins can manage match_stages" ON match_stages;
@@ -80,8 +73,10 @@ CREATE POLICY "Authenticated users can read match_stages"
   USING (auth.role() = 'authenticated');
 
 -- 5. Add match_id to scores (links a score to the specific match it was shot in)
-ALTER TABLE scores
-  ADD COLUMN IF NOT EXISTS match_id uuid REFERENCES competition_matches(id);
+ALTER TABLE scores ADD COLUMN IF NOT EXISTS match_id uuid REFERENCES competition_matches(id);
 
 -- 6. Drop match_type enum now that it is no longer referenced
 DROP TYPE IF EXISTS match_type;
+
+-- Ensure index exists for stages.discipline_id lookups
+CREATE INDEX IF NOT EXISTS idx_stages_discipline_id ON stages(discipline_id);

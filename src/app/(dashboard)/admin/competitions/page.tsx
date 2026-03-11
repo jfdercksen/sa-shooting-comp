@@ -49,6 +49,7 @@ export default function AdminCompetitionsPage() {
   const [disciplineFees, setDisciplineFees] = useState<Record<string, DisciplineFee>>({})
   const [matches, setMatches] = useState<Match[]>([])
   const [disciplineStages, setDisciplineStages] = useState<Record<string, Stage[]>>({})
+  const [loadingStages, setLoadingStages] = useState(false)
   const supabase = createClient()
 
   const [formData, setFormData] = useState<Partial<CompetitionInsert>>({
@@ -123,11 +124,13 @@ export default function AdminCompetitionsPage() {
 
   const fetchStagesForDisciplines = async (disciplineIds: string[]) => {
     if (disciplineIds.length === 0) return
+    setLoadingStages(true)
     const { data, error } = await supabase
       .from('stages')
       .select('*')
       .in('discipline_id', disciplineIds)
       .order('stage_number', { ascending: true })
+    setLoadingStages(false)
     if (error) {
       console.error('Error fetching discipline stages:', error)
       return
@@ -143,12 +146,19 @@ export default function AdminCompetitionsPage() {
 
   const handleDisciplineSelect = (disciplineId: string) => {
     if (selectedDisciplines.includes(disciplineId)) {
+      // Deselect: remove from disciplines, fees, and all match stage assignments
       setSelectedDisciplines(selectedDisciplines.filter((id) => id !== disciplineId))
       const newFees = { ...disciplineFees }
       delete newFees[disciplineId]
       setDisciplineFees(newFees)
+      setMatches(matches.map(m => ({
+        ...m,
+        matchStages: m.matchStages.filter(ms => ms.disciplineId !== disciplineId),
+      })))
     } else {
-      setSelectedDisciplines([...selectedDisciplines, disciplineId])
+      // Select: add discipline, fees, fetch stages, and add to all existing matches
+      const newDisciplines = [...selectedDisciplines, disciplineId]
+      setSelectedDisciplines(newDisciplines)
       setDisciplineFees({
         ...disciplineFees,
         [disciplineId]: {
@@ -160,6 +170,13 @@ export default function AdminCompetitionsPage() {
         },
       })
       fetchStagesForDisciplines([disciplineId])
+      // Add this discipline to all existing matches
+      setMatches(matches.map(m => ({
+        ...m,
+        matchStages: m.matchStages.some(ms => ms.disciplineId === disciplineId)
+          ? m.matchStages
+          : [...m.matchStages, { disciplineId, stageId: null }],
+      })))
     }
   }
 
@@ -496,6 +513,9 @@ export default function AdminCompetitionsPage() {
       // Populate disciplines
       const disciplineIds = compDisciplines?.map(cd => cd.discipline_id).filter((id): id is string => id !== null) || []
       setSelectedDisciplines(disciplineIds)
+      if (disciplineIds.length > 0) {
+        fetchStagesForDisciplines(disciplineIds)
+      }
 
       // Populate discipline fees
       const fees: Record<string, DisciplineFee> = {}
@@ -526,12 +546,6 @@ export default function AdminCompetitionsPage() {
         })),
       }))
       setMatches(loadedMatches)
-
-      // Fetch stages for all selected disciplines
-      if (disciplineIds.length > 0) {
-        fetchStagesForDisciplines(disciplineIds)
-      }
-
       setEditingCompetitionId(competitionId)
       setShowForm(true)
     } catch (error: any) {
@@ -881,6 +895,7 @@ export default function AdminCompetitionsPage() {
                         u25Fee: 0,
                         maxEntries: 0,
                       }
+                      const stages = disciplineStages[disciplineId]
 
                       return (
                         <div key={disciplineId} className="border border-gray-200 rounded-lg p-4">
@@ -891,6 +906,25 @@ export default function AdminCompetitionsPage() {
                             />
                             {discipline?.name}
                           </h5>
+
+                          {/* Stages summary */}
+                          <div className="mb-3">
+                            {loadingStages && !stages ? (
+                              <p className="text-xs text-gray-400">Loading stages...</p>
+                            ) : stages && stages.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                <span className="text-xs text-gray-500 mr-1">Stages:</span>
+                                {stages.map(s => (
+                                  <span key={s.id} className="text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-0.5">
+                                    {s.name}{s.distance ? ` (${s.distance})` : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : stages && stages.length === 0 ? (
+                              <p className="text-xs text-amber-600">⚠ No stages defined — go to Disciplines to add stages first</p>
+                            ) : null}
+                          </div>
+
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -1066,7 +1100,7 @@ export default function AdminCompetitionsPage() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                               {selectedDisciplines.map(disciplineId => {
                                 const discipline = disciplines.find(d => d.id === disciplineId)
-                                const stages = disciplineStages[disciplineId] || []
+                                const stages = disciplineStages[disciplineId]
                                 const assignment = match.matchStages.find(ms => ms.disciplineId === disciplineId)
                                 return (
                                   <div key={disciplineId} className="flex items-center gap-2">
@@ -1075,20 +1109,23 @@ export default function AdminCompetitionsPage() {
                                       style={{ backgroundColor: discipline?.color || '#1e40af' }}
                                     />
                                     <span className="text-sm text-gray-700 w-24 flex-shrink-0">{discipline?.name}</span>
-                                    <select
-                                      value={assignment?.stageId || ''}
-                                      onChange={(e) => updateMatchStage(match.id, disciplineId, e.target.value || null)}
-                                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                                    >
-                                      <option value="">— no stage —</option>
-                                      {stages.map(stage => (
-                                        <option key={stage.id} value={stage.id}>
-                                          {stage.name}{stage.distance ? ` (${stage.distance})` : ''} — {stage.sighters ?? 0}+{stage.rounds ?? 0}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    {stages.length === 0 && (
-                                      <span className="text-xs text-amber-600">No stages defined</span>
+                                    {!stages ? (
+                                      <span className="text-xs text-gray-400">Loading...</span>
+                                    ) : stages.length === 0 ? (
+                                      <span className="text-xs text-amber-600">No stages — add stages to discipline first</span>
+                                    ) : (
+                                      <select
+                                        value={assignment?.stageId || ''}
+                                        onChange={(e) => updateMatchStage(match.id, disciplineId, e.target.value || null)}
+                                        className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                      >
+                                        <option value="">— select stage —</option>
+                                        {stages.map(stage => (
+                                          <option key={stage.id} value={stage.id}>
+                                            {stage.name}{stage.distance ? ` (${stage.distance})` : ''} — {stage.sighters ?? 0}+{stage.rounds ?? 0}
+                                          </option>
+                                        ))}
+                                      </select>
                                     )}
                                   </div>
                                 )

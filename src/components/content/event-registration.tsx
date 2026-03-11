@@ -252,10 +252,7 @@ export default function EventRegistration({ competition, disciplines, matches }:
 
       // Create registration_matches entries for selected matches
       if (registration && !formData.allMatches && formData.selectedMatches.length > 0) {
-        // Find match IDs for selected match types
-        const selectedMatchIds = matches
-          .filter(m => formData.selectedMatches.includes(m.id))
-          .map(m => m.id)
+        const selectedMatchIds = formData.selectedMatches
 
         if (selectedMatchIds.length > 0) {
           const registrationMatchesData = selectedMatchIds.map(matchId => ({

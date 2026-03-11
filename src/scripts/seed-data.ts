@@ -359,26 +359,34 @@ async function seedData() {
       console.log('🎯 Creating stages and sample scores...')
       const stageIds: string[] = []
 
-      // Create stages for first discipline
-      const stageNames = ['Stage 1', 'Stage 2', 'Stage 3']
-      const stageDistances = ['300m', '500m', '600m']
-      const firstDisciplineId = disciplines[0].id
-      for (let i = 0; i < 3; i++) {
-        const { data: stageData, error: stageError } = await supabase
-          .from('stages')
-          .insert({
-            discipline_id: firstDisciplineId,
-            name: stageNames[i],
-            stage_number: i + 1,
-            distance: stageDistances[i],
-            rounds: 10,
-            max_score: 50,
-          })
-          .select()
-          .single()
+      // Fetch first discipline to attach stages to
+      const { data: firstDiscipline } = await supabase
+        .from('disciplines')
+        .select('id')
+        .limit(1)
+        .single()
 
-        if (!stageError && stageData) {
-          stageIds.push(stageData.id)
+      if (firstDiscipline) {
+        // Create stages for the first discipline
+        const stageNames = ['Stage 1', 'Stage 2', 'Stage 3']
+        const distances = ['300m', '500m', '600m']
+        for (let i = 0; i < 3; i++) {
+          const { data: stageData, error: stageError } = await supabase
+            .from('stages')
+            .insert({
+              discipline_id: firstDiscipline.id,
+              name: stageNames[i],
+              stage_number: i + 1,
+              distance: distances[i],
+              rounds: 10,
+              max_score: 50,
+            })
+            .select()
+            .single()
+
+          if (!stageError && stageData) {
+            stageIds.push(stageData.id)
+          }
         }
       }
 
