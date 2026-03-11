@@ -46,7 +46,7 @@ export default function ResultsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedDiscipline, setSelectedDiscipline] = useState<string>('')
   const [selectedAgeClass, setSelectedAgeClass] = useState<string>('')
-  const [viewMode, setViewMode] = useState<'individual' | 'team' | 'discipline' | 'age'>('individual')
+  const [viewMode, setViewMode] = useState<'individual' | 'team' | 'discipline' | 'age' | 'total'>('individual')
   const [teamResults, setTeamResults] = useState<any[]>([])
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
@@ -746,6 +746,54 @@ export default function ResultsPage() {
     return true
   })
 
+  // Competition totals: merge all per-discipline registrations for same shooter
+  interface CompetitionTotal {
+    userId: string
+    shooterName: string
+    sabuNumber: string
+    club: string
+    province: string
+    disciplines: string[]
+    grandTotal: number
+    totalX: number
+    totalV: number
+    hasUnverified: boolean
+  }
+
+  const competitionTotalsMap: Record<string, CompetitionTotal> = {}
+  results.forEach((r) => {
+    if (!competitionTotalsMap[r.userId]) {
+      competitionTotalsMap[r.userId] = {
+        userId: r.userId,
+        shooterName: r.shooterName,
+        sabuNumber: r.sabuNumber,
+        club: r.club,
+        province: r.province,
+        disciplines: [],
+        grandTotal: 0,
+        totalX: 0,
+        totalV: 0,
+        hasUnverified: false,
+      }
+    }
+    const entry = competitionTotalsMap[r.userId]
+    if (r.disciplineName && !entry.disciplines.includes(r.disciplineName)) {
+      entry.disciplines.push(r.disciplineName)
+    }
+    if (!r.hasDNF && !r.hasDQ) {
+      entry.grandTotal += r.totalScore
+      entry.totalX += r.totalX
+      entry.totalV += r.totalV
+    }
+    if (r.hasUnverified) entry.hasUnverified = true
+  })
+
+  const competitionTotals = Object.values(competitionTotalsMap).sort((a, b) => {
+    if (b.grandTotal !== a.grandTotal) return b.grandTotal - a.grandTotal
+    if (b.totalX !== a.totalX) return b.totalX - a.totalX
+    return b.totalV - a.totalV
+  })
+
   const ageClassifications = ['Open', 'Under_19', 'Under_25', 'Veteran_60_plus', 'Veteran_70_plus']
 
   if (loading && competitions.length === 0) {
@@ -832,6 +880,7 @@ export default function ResultsPage() {
               <div className="flex flex-wrap gap-2 mb-4">
                 {[
                   { id: 'individual', label: 'Individual Results' },
+                  { id: 'total', label: 'Competition Total' },
                   { id: 'team', label: 'Team Results' },
                   { id: 'discipline', label: 'By Discipline' },
                   { id: 'age', label: 'By Age Classification' },
@@ -945,7 +994,94 @@ export default function ResultsPage() {
             </div>
 
             {/* Results Table */}
-            {viewMode === 'team' ? (
+            {viewMode === 'total' ? (
+              // Competition Total Table — one row per shooter, summed across all disciplines
+              competitionTotals.length === 0 ? (
+                <div className="bg-white rounded-lg shadow-md p-12 text-center">
+                  <Trophy className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 text-lg">No results found</p>
+                </div>
+              ) : (
+                <div ref={resultsRef} className="bg-white rounded-lg shadow-md overflow-hidden">
+                  <div className="hidden print:block p-6 border-b border-gray-200">
+                    <h2 className="text-2xl font-bold text-gray-900">
+                      {competitions.find((c) => c.id === selectedCompetition)?.name} — Competition Total
+                    </h2>
+                    <p className="text-gray-600 mt-1">
+                      Results - {format(new Date(), 'MMMM d, yyyy')}
+                    </p>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pos</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SABU #</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Club</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Disciplines</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Grand Total</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">X</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">V</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {competitionTotals.map((entry, index) => {
+                          const position = index + 1
+                          const isCurrentUser = user && entry.userId === user.id
+                          return (
+                            <tr
+                              key={entry.userId}
+                              className={isCurrentUser ? 'bg-blue-50 border-l-4 border-[#1e40af]' : ''}
+                            >
+                              <td className="px-4 py-4 whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                  {getMedalIcon(position)}
+                                  <span className={`text-sm font-semibold ${position <= 3 ? 'text-gray-900' : 'text-gray-700'}`}>
+                                    {position}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {entry.shooterName}
+                                  {isCurrentUser && <span className="ml-2 text-xs text-[#1e40af]">(You)</span>}
+                                </div>
+                              </td>
+                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {entry.sabuNumber || '-'}
+                              </td>
+                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {entry.club || '-'}
+                              </td>
+                              <td className="px-4 py-4 text-sm text-gray-500">
+                                {entry.disciplines.join(', ') || '-'}
+                              </td>
+                              <td className="px-4 py-4 whitespace-nowrap text-right">
+                                <div className="flex flex-col items-end gap-0.5">
+                                  <span className="text-sm font-bold text-gray-900">{entry.grandTotal}</span>
+                                  {entry.hasUnverified && (
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 font-medium">
+                                      Provisional
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-900">
+                                {entry.totalX}
+                              </td>
+                              <td className="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-900">
+                                {entry.totalV}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            ) : viewMode === 'team' ? (
               // Team Results Table
               teamResults.length === 0 ? (
                 <div className="bg-white rounded-lg shadow-md p-12 text-center">
