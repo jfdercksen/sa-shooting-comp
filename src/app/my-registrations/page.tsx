@@ -261,7 +261,7 @@ export default function MyRegistrationsPage() {
             {/* Upcoming Registrations */}
             {upcomingRegistrations.length > 0 && (
               <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Upcoming Competitions</h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Upcoming Matches</h2>
                 <div className="space-y-4">
                   {upcomingRegistrations.map((reg) => (
                     <RegistrationCard key={reg.id} registration={reg} getStatusBadge={getStatusBadge} getPaymentStatusBadge={getPaymentStatusBadge} />

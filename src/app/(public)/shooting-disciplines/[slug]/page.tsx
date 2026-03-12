@@ -175,7 +175,7 @@ export default async function DisciplineDetailPage({
               <section className="bg-white rounded-lg shadow-md p-6">
                 <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
                   <Calendar className="mr-2 h-5 w-5 text-[#1e40af]" />
-                  Upcoming Competitions
+                  Upcoming Matches
                 </h2>
                 <div className="space-y-4">
                   {upcomingCompetitions.map((cd: any) => {

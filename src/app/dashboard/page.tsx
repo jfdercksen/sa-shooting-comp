@@ -203,7 +203,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <ActivityCard
             icon={<Calendar className="h-8 w-8" />}
-            title="Upcoming Competitions"
+            title="Upcoming Matches"
             count={upcomingCompetitions.length}
             color="bg-blue-100 text-blue-600"
             link="/events"
@@ -237,7 +237,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-bold text-gray-900 flex items-center">
                 <Calendar className="h-6 w-6 mr-2 text-[#1e40af]" />
-                Upcoming Competitions
+                Upcoming Matches
               </h2>
               <Link
                 href="/events"
