@@ -24,13 +24,19 @@ interface Discipline {
   }
 }
 
+interface MatchDiscipline {
+  match_id: string
+  discipline_id: string
+}
+
 interface EventRegistrationProps {
   competition: Competition
   disciplines: Discipline[]
   matches: CompetitionMatch[]
+  matchDisciplines: MatchDiscipline[]
 }
 
-export default function EventRegistration({ competition, disciplines, matches }: EventRegistrationProps) {
+export default function EventRegistration({ competition, disciplines, matches, matchDisciplines }: EventRegistrationProps) {
   const [showModal, setShowModal] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
   const [loading, setLoading] = useState(false)
@@ -42,7 +48,7 @@ export default function EventRegistration({ competition, disciplines, matches }:
   const supabase = createClient()
 
   const [formData, setFormData] = useState({
-    disciplineId: '',
+    disciplineIds: [] as string[],
     selectedMatches: [] as string[],
     allMatches: false,
     entryType: 'individual' as 'individual' | 'team',
@@ -96,35 +102,45 @@ export default function EventRegistration({ competition, disciplines, matches }:
     fetchUser()
   }, [supabase])
 
-  const selectedDiscipline = disciplines.find((d) => d.id === formData.disciplineId)
-  const selectedDisciplineFees = selectedDiscipline?.fees
+  // Disciplines selected by the user
+  const selectedDisciplines = disciplines.filter((d) => formData.disciplineIds.includes(d.id))
+
+  // Matches available for the selected disciplines (via match_stages mapping)
+  const availableMatchIds = new Set(
+    matchDisciplines
+      .filter((md) => formData.disciplineIds.includes(md.discipline_id))
+      .map((md) => md.match_id)
+  )
+  // If no match_stages data, fall back to showing all matches
+  const filteredMatches = matchDisciplines.length > 0
+    ? matches.filter((m) => availableMatchIds.has(m.id))
+    : matches
 
   // Calculate fees
   const calculateFees = () => {
-    if (!selectedDisciplineFees) return { total: 0, breakdown: [] }
-
     const breakdown: Array<{ label: string; amount: number }> = []
     let total = 0
 
-    // Discipline fee based on age classification
-    if (profile?.age_classification) {
-      let disciplineFee = 0
-      if (profile.age_classification === 'Under_19' && selectedDisciplineFees.u19 !== null) {
-        disciplineFee = selectedDisciplineFees.u19
-        breakdown.push({ label: `${selectedDiscipline?.name} (U19)`, amount: disciplineFee })
-      } else if (profile.age_classification === 'Under_25' && selectedDisciplineFees.u25 !== null) {
-        disciplineFee = selectedDisciplineFees.u25
-        breakdown.push({ label: `${selectedDiscipline?.name} (U25)`, amount: disciplineFee })
-      } else if (selectedDisciplineFees.standard !== null) {
-        disciplineFee = selectedDisciplineFees.standard
-        breakdown.push({ label: `${selectedDiscipline?.name}`, amount: disciplineFee })
+    // Fee per selected discipline
+    selectedDisciplines.forEach((d) => {
+      const fees = d.fees
+      let fee = 0
+      if (profile?.age_classification === 'Under_19' && fees.u19 !== null) {
+        fee = fees.u19
+        breakdown.push({ label: `${d.name} (U19)`, amount: fee })
+      } else if (profile?.age_classification === 'Under_25' && fees.u25 !== null) {
+        fee = fees.u25
+        breakdown.push({ label: `${d.name} (U25)`, amount: fee })
+      } else if (fees.standard !== null) {
+        fee = fees.standard
+        breakdown.push({ label: d.name, amount: fee })
       }
-      total += disciplineFee
-    }
+      total += fee
+    })
 
     // Match fees
     if (formData.allMatches) {
-      const matchFees = matches
+      const matchFees = filteredMatches
         .filter((m) => !m.is_optional)
         .reduce((sum, m) => sum + m.entry_fee, 0)
       if (matchFees > 0) {
@@ -158,8 +174,8 @@ export default function EventRegistration({ competition, disciplines, matches }:
   const fees = calculateFees()
 
   const handleNext = () => {
-    if (currentStep === 1 && !formData.disciplineId) {
-      toast.error('Please select a discipline')
+    if (currentStep === 1 && formData.disciplineIds.length === 0) {
+      toast.error('Please select at least one discipline')
       return
     }
     if (currentStep === 2 && !formData.allMatches && formData.selectedMatches.length === 0) {
@@ -190,72 +206,53 @@ export default function EventRegistration({ competition, disciplines, matches }:
       const entryNum = `ENT-${competition.slug.toUpperCase()}-${Date.now().toString().slice(-6)}`
 
       // Validate required fields
-      if (!formData.disciplineId) {
-        throw new Error('Please select a discipline')
+      if (formData.disciplineIds.length === 0) {
+        throw new Error('Please select at least one discipline')
       }
 
       if (!profile?.age_classification) {
         throw new Error('Age classification is missing from your profile. Please update your profile.')
       }
 
-      if (!selectedDiscipline) {
-        throw new Error('Selected discipline not found')
-      }
-
-      // Validate fees calculation
       if (fees.total === undefined || fees.total === null || isNaN(fees.total)) {
-        console.error('Invalid fees calculation:', fees)
         throw new Error('Unable to calculate registration fees. Please try again.')
       }
 
-      // Validate matches selection
-      if (!formData.allMatches) {
-        if (!formData.selectedMatches || formData.selectedMatches.length === 0) {
-          throw new Error('Please select at least one match')
+      if (!formData.allMatches && formData.selectedMatches.length === 0) {
+        throw new Error('Please select at least one match')
+      }
+
+      // Create one registration per selected discipline
+      const feePerDiscipline = fees.total / formData.disciplineIds.length
+
+      for (const disciplineId of formData.disciplineIds) {
+        const registrationData = {
+          user_id: user.id,
+          competition_id: competition.id,
+          discipline_id: disciplineId,
+          age_classification: profile.age_classification,
+          all_matches: formData.allMatches,
+          team_id: formData.teamId || null,
+          requires_import_permit: formData.requiresImportPermit || false,
+          permit_application_by: formData.requiresImportPermit && formData.permitApplicationBy ? formData.permitApplicationBy : null,
+          total_fee: feePerDiscipline,
+          registration_status: 'confirmed' as const,
+          payment_status: 'pending' as const,
+          entry_number: entryNum,
+          registered_at: new Date().toISOString(),
         }
-      }
 
-      // Create registration (without selected_matches - that goes in registration_matches table)
-      const registrationData = {
-        user_id: user.id,
-        competition_id: competition.id,
-        discipline_id: formData.disciplineId,
-        age_classification: profile.age_classification, // Required field
-        all_matches: formData.allMatches,
-        team_id: formData.teamId || null,
-        requires_import_permit: formData.requiresImportPermit || false,
-        permit_application_by: formData.requiresImportPermit && formData.permitApplicationBy ? formData.permitApplicationBy : null,
-        total_fee: fees.total,
-        registration_status: 'confirmed' as const,
-        payment_status: 'pending' as const,
-        entry_number: entryNum,
-        registered_at: new Date().toISOString(),
-      }
+        const { data: registration, error: regError } = await supabase
+          .from('registrations')
+          .insert(registrationData)
+          .select()
+          .single()
 
-      console.log('Submitting registration:', registrationData)
+        if (regError) throw regError
 
-      const { data: registration, error: regError } = await supabase
-        .from('registrations')
-        .insert(registrationData)
-        .select()
-        .single()
-
-      if (regError) {
-        console.error('Supabase error details:', {
-          message: regError.message,
-          details: regError.details,
-          hint: regError.hint,
-          code: regError.code,
-        })
-        throw regError
-      }
-
-      // Create registration_matches entries for selected matches
-      if (registration && !formData.allMatches && formData.selectedMatches.length > 0) {
-        const selectedMatchIds = formData.selectedMatches
-
-        if (selectedMatchIds.length > 0) {
-          const registrationMatchesData = selectedMatchIds.map(matchId => ({
+        // Link selected matches to this registration
+        if (registration && !formData.allMatches && formData.selectedMatches.length > 0) {
+          const registrationMatchesData = formData.selectedMatches.map(matchId => ({
             registration_id: registration.id,
             match_id: matchId,
             fee_paid: matches.find(m => m.id === matchId)?.entry_fee || 0,
@@ -267,8 +264,7 @@ export default function EventRegistration({ competition, disciplines, matches }:
 
           if (matchesError) {
             console.error('Error creating registration matches:', matchesError)
-            // Don't throw - registration was created, matches can be added later
-            toast.warning('Registration created but match selection may not have been saved. Please contact support.')
+            toast.warning('Registration created but match selection may not have been saved.')
           }
         }
       }
@@ -319,7 +315,7 @@ export default function EventRegistration({ competition, disciplines, matches }:
   }
 
   const steps = [
-    { number: 1, title: 'Select Discipline', icon: Target },
+    { number: 1, title: 'Select Disciplines', icon: Target },
     { number: 2, title: 'Choose Matches', icon: Trophy },
     { number: 3, title: 'Team Option', icon: Users },
     { number: 4, title: 'Additional Options', icon: FileText },
@@ -381,7 +377,7 @@ export default function EventRegistration({ competition, disciplines, matches }:
                     setShowModal(false)
                     setCurrentStep(1)
                     setFormData({
-                      disciplineId: '',
+                      disciplineIds: [],
                       selectedMatches: [],
                       allMatches: false,
                       entryType: 'individual',
@@ -399,50 +395,69 @@ export default function EventRegistration({ competition, disciplines, matches }:
 
             {/* Content */}
             <div className="p-6">
-              {/* Step 1: Select Discipline */}
+              {/* Step 1: Select Disciplines */}
               {currentStep === 1 && (
                 <div className="space-y-4">
-                  <h3 className="text-xl font-bold text-gray-900 mb-4">Select Discipline</h3>
+                  <div className="mb-4">
+                    <h3 className="text-xl font-bold text-gray-900">Select Disciplines</h3>
+                    <p className="text-sm text-gray-500 mt-1">You can select one or more disciplines to enter.</p>
+                  </div>
                   <div className="space-y-3">
-                    {disciplines.map((discipline) => (
-                      <label
-                        key={discipline.id}
-                        className={`block p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-                          formData.disciplineId === discipline.id
-                            ? 'border-[#1e40af] bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="discipline"
-                          value={discipline.id}
-                          checked={formData.disciplineId === discipline.id}
-                          onChange={(e) => setFormData({ ...formData, disciplineId: e.target.value })}
-                          className="sr-only"
-                        />
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <div
-                              className="w-4 h-4 rounded mr-3"
-                              style={{ backgroundColor: discipline.color || '#1e40af' }}
-                            />
+                    {disciplines.map((discipline) => {
+                      const checked = formData.disciplineIds.includes(discipline.id)
+                      return (
+                        <label
+                          key={discipline.id}
+                          className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                            checked ? 'border-[#1e40af] bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              const ids = e.target.checked
+                                ? [...formData.disciplineIds, discipline.id]
+                                : formData.disciplineIds.filter(id => id !== discipline.id)
+                              // Clear match selection when disciplines change
+                              setFormData({ ...formData, disciplineIds: ids, selectedMatches: [], allMatches: false })
+                            }}
+                            className="w-4 h-4 mr-3 accent-[#1e40af]"
+                          />
+                          <div
+                            className="w-3 h-3 rounded-full mr-3 flex-shrink-0"
+                            style={{ backgroundColor: discipline.color || '#1e40af' }}
+                          />
+                          <div className="flex-1">
                             <span className="font-semibold text-gray-900">{discipline.name}</span>
                           </div>
-                          {discipline.fees.standard !== null && (
-                            <span className="text-gray-600">R{discipline.fees.standard.toFixed(2)}</span>
-                          )}
-                        </div>
-                      </label>
-                    ))}
+                          <div className="text-right text-sm text-gray-600 ml-3">
+                            {discipline.fees.standard !== null && (
+                              <span>R{discipline.fees.standard.toFixed(2)}</span>
+                            )}
+                          </div>
+                        </label>
+                      )
+                    })}
                   </div>
+                  {formData.disciplineIds.length > 0 && (
+                    <p className="text-sm text-[#1e40af] font-medium">
+                      ✓ {formData.disciplineIds.length} discipline{formData.disciplineIds.length > 1 ? 's' : ''} selected
+                    </p>
+                  )}
                 </div>
               )}
 
               {/* Step 2: Choose Matches */}
               {currentStep === 2 && (
                 <div className="space-y-4">
-                  <h3 className="text-xl font-bold text-gray-900 mb-4">Choose Matches</h3>
+                  <div className="mb-4">
+                    <h3 className="text-xl font-bold text-gray-900">Choose Matches</h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Showing matches for: <span className="font-medium text-gray-700">{selectedDisciplines.map(d => d.name).join(', ')}</span>
+                    </p>
+                  </div>
+
                   <label className="flex items-center p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-gray-300">
                     <input
                       type="checkbox"
@@ -454,7 +469,7 @@ export default function EventRegistration({ competition, disciplines, matches }:
                           selectedMatches: e.target.checked ? [] : formData.selectedMatches,
                         })
                       }}
-                      className="mr-3"
+                      className="w-4 h-4 mr-3 accent-[#1e40af]"
                     />
                     <div className="flex-1">
                       <div className="font-semibold text-gray-900">All Matches</div>
@@ -466,46 +481,46 @@ export default function EventRegistration({ competition, disciplines, matches }:
 
                   {!formData.allMatches && (
                     <div className="space-y-2">
-                      {matches.map((match) => (
-                        <label
-                          key={match.id}
-                          className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-                            formData.selectedMatches.includes(match.id)
-                              ? 'border-[#1e40af] bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <div className="flex items-center">
-                            <input
-                              type="checkbox"
-                              checked={formData.selectedMatches.includes(match.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setFormData({
-                                    ...formData,
-                                    selectedMatches: [...formData.selectedMatches, match.id],
-                                  })
-                                } else {
-                                  setFormData({
-                                    ...formData,
-                                    selectedMatches: formData.selectedMatches.filter((m) => m !== match.id),
-                                  })
-                                }
-                              }}
-                              className="mr-3"
-                            />
-                            <div>
-                              <div className="font-semibold text-gray-900">{match.match_name}</div>
-                              <div className="text-sm text-gray-600">
-                                {match.distance}
-                                {match.match_date && ` • ${format(new Date(match.match_date), 'MMM d')}`}
-                                {match.is_optional && ' • Optional'}
+                      {filteredMatches.length === 0 ? (
+                        <p className="text-sm text-gray-500 italic p-4 border border-dashed border-gray-300 rounded-lg">
+                          No matches found for the selected disciplines.
+                        </p>
+                      ) : (
+                        filteredMatches.map((match) => (
+                          <label
+                            key={match.id}
+                            className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                              formData.selectedMatches.includes(match.id)
+                                ? 'border-[#1e40af] bg-blue-50'
+                                : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          >
+                            <div className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={formData.selectedMatches.includes(match.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setFormData({ ...formData, selectedMatches: [...formData.selectedMatches, match.id] })
+                                  } else {
+                                    setFormData({ ...formData, selectedMatches: formData.selectedMatches.filter((m) => m !== match.id) })
+                                  }
+                                }}
+                                className="w-4 h-4 mr-3 accent-[#1e40af]"
+                              />
+                              <div>
+                                <div className="font-semibold text-gray-900">{match.match_name}</div>
+                                <div className="text-sm text-gray-600">
+                                  {match.distance}
+                                  {match.match_date && ` • ${format(new Date(match.match_date), 'MMM d')}`}
+                                  {match.is_optional && ' • Optional'}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <span className="font-semibold text-gray-900">R{match.entry_fee.toFixed(2)}</span>
-                        </label>
-                      ))}
+                            <span className="font-semibold text-gray-900">R{match.entry_fee.toFixed(2)}</span>
+                          </label>
+                        ))
+                      )}
                     </div>
                   )}
                 </div>

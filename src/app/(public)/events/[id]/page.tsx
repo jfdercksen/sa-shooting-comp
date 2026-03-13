@@ -52,12 +52,22 @@ export default async function EventDetailPage({
     .eq('competition_id', id)
     .order('match_date', { ascending: true, nullsFirst: false })
 
-  // Count registrations
-  const { count: registeredCount } = await supabase
+  // Fetch which matches belong to which disciplines (via match_stages)
+  const matchIds = matches?.map(m => m.id) || []
+  const { data: matchDisciplines } = matchIds.length > 0
+    ? await supabase
+        .from('match_stages')
+        .select('match_id, discipline_id')
+        .in('match_id', matchIds)
+    : { data: [] }
+
+  // Count unique registered users (not individual registration rows, since each discipline creates a separate row)
+  const { data: registrationData } = await supabase
     .from('registrations')
-    .select('*', { count: 'exact', head: true })
+    .select('user_id')
     .eq('competition_id', id)
     .in('registration_status', ['pending', 'confirmed'])
+  const registeredCount = new Set(registrationData?.map(r => r.user_id) || []).size
 
   // Check if user is logged in
   const { data: { user } } = await supabase.auth.getUser()
@@ -342,6 +352,7 @@ export default async function EventDetailPage({
                     competition={competition}
                     disciplines={disciplines}
                     matches={matches || []}
+                    matchDisciplines={matchDisciplines || []}
                   />
                 ) : (
                   <Link

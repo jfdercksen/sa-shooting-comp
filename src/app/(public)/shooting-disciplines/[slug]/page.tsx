@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Calendar, Target, ArrowLeft, Trophy } from 'lucide-react'
 import { format } from 'date-fns'
 import type { Database } from '@/types/database'
+import StagesManager from '@/components/disciplines/StagesManager'
 
 type Discipline = Database['public']['Tables']['disciplines']['Row']
 type Competition = Database['public']['Tables']['competitions']['Row']
@@ -50,11 +51,23 @@ export default async function DisciplineDetailPage({
     .limit(5)
 
   // Fetch discipline stages
-  const { data: templates } = await supabase
+  const { data: stages } = await supabase
     .from('stages')
     .select('*')
     .eq('discipline_id', discipline.id)
     .order('stage_number', { ascending: true })
+
+  // Check if current user is admin
+  const { data: { user } } = await supabase.auth.getUser()
+  let isAdmin = false
+  if (user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin'
+  }
 
   // Fetch recent results (you'll need to implement results table query based on your schema)
   // For now, we'll show a placeholder
@@ -85,7 +98,7 @@ export default async function DisciplineDetailPage({
       </div>
 
       {/* Back Button */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 flex items-center justify-between">
         <Link
           href="/shooting-disciplines"
           className="inline-flex items-center text-[#1e40af] hover:text-[#1e3a8a] font-semibold"
@@ -93,6 +106,13 @@ export default async function DisciplineDetailPage({
           <ArrowLeft className="mr-2 h-5 w-5" />
           Back to Disciplines
         </Link>
+        {isAdmin && (
+          <StagesManager
+            disciplineId={discipline.id}
+            disciplineName={discipline.name}
+            initialStages={stages ?? []}
+          />
+        )}
       </div>
 
       {/* Main Content */}
@@ -134,7 +154,7 @@ export default async function DisciplineDetailPage({
             )}
 
             {/* Stages */}
-            {templates && templates.length > 0 && (
+            {stages && stages.length > 0 && (
               <section className="bg-white rounded-lg shadow-md p-6">
                 <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
                   <Target className="mr-2 h-6 w-6 text-[#1e40af]" />
@@ -152,7 +172,7 @@ export default async function DisciplineDetailPage({
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {templates.map((stage) => (
+                      {stages.map((stage) => (
                         <tr key={stage.id} className="hover:bg-gray-50 border-b border-gray-100">
                           <td className="px-4 py-3 text-sm font-medium text-gray-900">{stage.stage_number}</td>
                           <td className="px-4 py-3 text-sm text-gray-700 font-semibold">{stage.name}</td>

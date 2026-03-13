@@ -71,7 +71,7 @@ export default function AdminVerifyScoresPage() {
           id,
           name,
           stage_number,
-          competition_id
+          discipline_id
         ),
         registrations!inner (
           id,
@@ -141,15 +141,15 @@ export default function AdminVerifyScoresPage() {
 
       setScores(filtered)
 
-      // Update stages based on selected competition
-      if (filters.competitionId) {
-        const { data: compStages } = await supabase
+      // Update stages based on selected discipline (stages now belong to disciplines)
+      if (filters.disciplineId) {
+        const { data: discStages } = await supabase
           .from('stages')
           .select('id, name, stage_number')
-          .eq('competition_id', filters.competitionId)
+          .eq('discipline_id', filters.disciplineId)
           .order('stage_number', { ascending: true })
 
-        if (compStages) setStages(compStages)
+        if (discStages) setStages(discStages)
       } else {
         setStages([])
       }
@@ -446,7 +446,7 @@ export default function AdminVerifyScoresPage() {
             <label className="block text-sm font-medium text-gray-700 mb-2">Discipline</label>
             <select
               value={filters.disciplineId}
-              onChange={(e) => setFilters({ ...filters, disciplineId: e.target.value })}
+              onChange={(e) => setFilters({ ...filters, disciplineId: e.target.value, stageId: '' })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
             >
               <option value="">All Disciplines</option>
@@ -464,9 +464,9 @@ export default function AdminVerifyScoresPage() {
               value={filters.stageId}
               onChange={(e) => setFilters({ ...filters, stageId: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-              disabled={!filters.competitionId}
+              disabled={!filters.disciplineId}
             >
-              <option value="">All Stages</option>
+              <option value="">{filters.disciplineId ? 'All Stages' : 'Select discipline first'}</option>
               {stages.map((stage) => (
                 <option key={stage.id} value={stage.id}>
                   {stage.name}

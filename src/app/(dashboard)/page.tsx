@@ -227,16 +227,16 @@ export default function DashboardPage() {
 
         {/* My Activity Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Upcoming Competitions */}
+          {/* Upcoming Matches */}
           <ActivityCard
-            title="Upcoming Competitions"
+            title="Upcoming Matches"
             icon={<Calendar className="h-6 w-6" />}
             count={upcomingCompetitions.length}
             link="/events"
             linkText="View All Events"
           >
             {upcomingCompetitions.length === 0 ? (
-              <p className="text-gray-500 text-sm">No upcoming competitions registered</p>
+              <p className="text-gray-500 text-sm">No upcoming matches registered</p>
             ) : (
               <div className="space-y-3">
                 {upcomingCompetitions.map((comp) => (
@@ -524,7 +524,7 @@ function MyRegistrationsSection() {
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-900">My Registrations</h2>
-            <p className="text-sm text-gray-600">{registrations.length} registration{registrations.length !== 1 ? 's' : ''}</p>
+            <p className="text-sm text-gray-600">{new Set(registrations.map(r => r.competition?.id).filter(Boolean)).size} registration{new Set(registrations.map(r => r.competition?.id).filter(Boolean)).size !== 1 ? 's' : ''}</p>
           </div>
         </div>
         <Link
