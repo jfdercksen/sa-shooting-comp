@@ -13,6 +13,7 @@ import {
   Award,
   ArrowRight,
   CheckCircle,
+  MapPin,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -28,7 +29,12 @@ type Notification = Database['public']['Tables']['notifications']['Row']
 
 export default function DashboardPage() {
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [upcomingCompetitions, setUpcomingCompetitions] = useState<Array<Competition & { registration: Registration | null }>>([])
+  const [upcomingCompetitions, setUpcomingCompetitions] = useState<Array<{
+    competition: Competition
+    disciplines: string[]
+    matches: Array<{ match_name: string; match_date: string | null; distance: string | null }>
+    allMatches: boolean
+  }>>([])
   const [recentScores, setRecentScores] = useState<Array<Score & { competition: Competition | null; discipline: any }>>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -70,12 +76,12 @@ export default function DashboardPage() {
           .eq('id', user.id)
           .single(),
         
-        // Load upcoming competitions where user is registered
+        // Load registrations with competition, discipline, and match details
         supabase
           .from('registrations')
-          .select('*, competitions(*)')
+          .select('*, competitions(*), disciplines(name), registration_matches(*, competition_matches(match_name, match_date, distance))')
           .eq('user_id', user.id)
-          .order('competitions(start_date)', { ascending: true }),
+          .in('registration_status', ['pending', 'confirmed']),
         
         // Load recent scores (last 5)
         supabase
@@ -113,15 +119,51 @@ export default function DashboardPage() {
       setProfile(profileData)
 
       const registrations = registrationsResult.data || []
-      const upcoming = registrations
-        .filter((reg: any) => {
-          const comp = reg.competitions
-          return comp && new Date(comp.start_date) >= new Date()
+      
+      // Group registrations by competition for the upcoming card
+      const competitionMap = new Map<string, {
+        competition: any
+        disciplines: Set<string>
+        matches: Map<string, { match_name: string; match_date: string | null; distance: string | null }>
+        allMatches: boolean
+      }>()
+      
+      registrations.forEach((reg: any) => {
+        const comp = reg.competitions
+        if (!comp || new Date(comp.start_date) < new Date()) return
+        
+        if (!competitionMap.has(comp.id)) {
+          competitionMap.set(comp.id, {
+            competition: comp,
+            disciplines: new Set(),
+            matches: new Map(),
+            allMatches: false,
+          })
+        }
+        const entry = competitionMap.get(comp.id)!
+        if (reg.disciplines?.name) entry.disciplines.add(reg.disciplines.name)
+        if (reg.all_matches) entry.allMatches = true
+        // Add linked matches
+        reg.registration_matches?.forEach((rm: any) => {
+          const m = rm.competition_matches
+          if (m && !entry.matches.has(rm.match_id)) {
+            entry.matches.set(rm.match_id, {
+              match_name: m.match_name,
+              match_date: m.match_date,
+              distance: m.distance,
+            })
+          }
         })
+      })
+      
+      const upcoming = Array.from(competitionMap.values())
+        .sort((a, b) => new Date(a.competition.start_date).getTime() - new Date(b.competition.start_date).getTime())
         .slice(0, 3)
-        .map((reg: any) => ({
-          ...reg.competitions,
-          registration: reg,
+        .map(entry => ({
+          competition: entry.competition,
+          disciplines: Array.from(entry.disciplines),
+          matches: Array.from(entry.matches.values()),
+          allMatches: entry.allMatches,
         }))
       setUpcomingCompetitions(upcoming)
 
@@ -227,28 +269,61 @@ export default function DashboardPage() {
 
         {/* My Activity Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Upcoming Matches */}
+          {/* Upcoming Competitions & Matches */}
           <ActivityCard
-            title="Upcoming Matches"
+            title="Upcoming Competitions"
             icon={<Calendar className="h-6 w-6" />}
             count={upcomingCompetitions.length}
             link="/events"
             linkText="View All Events"
           >
             {upcomingCompetitions.length === 0 ? (
-              <p className="text-gray-500 text-sm">No upcoming matches registered</p>
+              <p className="text-gray-500 text-sm">No upcoming competitions registered</p>
             ) : (
-              <div className="space-y-3">
-                {upcomingCompetitions.map((comp) => (
-                  <div key={`${comp.id}-${comp.registration?.id || ''}`} className="border-l-4 border-[#1e40af] pl-4">
-                    <h4 className="font-semibold text-gray-900">{comp.name}</h4>
+              <div className="space-y-4">
+                {upcomingCompetitions.map((entry) => (
+                  <div key={entry.competition.id} className="border-l-4 border-[#1e40af] pl-4">
+                    <h4 className="font-semibold text-gray-900">{entry.competition.name}</h4>
                     <p className="text-sm text-gray-600">
-                      {format(new Date(comp.start_date), 'MMM d')} -{' '}
-                      {format(new Date(comp.end_date), 'MMM d, yyyy')}
+                      {format(new Date(entry.competition.start_date), 'MMM d')} -{' '}
+                      {format(new Date(entry.competition.end_date), 'MMM d, yyyy')}
                     </p>
+                    {entry.competition.location && (
+                      <p className="text-sm text-gray-500 flex items-center gap-1 mt-0.5">
+                        <MapPin className="h-3 w-3" />
+                        {entry.competition.location}
+                      </p>
+                    )}
+                    {entry.disciplines.length > 0 && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        <span className="font-medium">Disciplines:</span> {entry.disciplines.join(', ')}
+                      </p>
+                    )}
+                    {/* Matches */}
+                    {(entry.allMatches || entry.matches.length > 0) && (
+                      <div className="mt-2 bg-gray-50 rounded p-2">
+                        <p className="text-xs font-semibold text-gray-700 mb-1 flex items-center gap-1">
+                          <Trophy className="h-3 w-3" /> Matches:
+                        </p>
+                        {entry.allMatches ? (
+                          <p className="text-xs text-gray-600">All matches</p>
+                        ) : (
+                          <ul className="space-y-0.5">
+                            {entry.matches.map((match, idx) => (
+                              <li key={idx} className="text-xs text-gray-600 flex items-center gap-1">
+                                <span className="w-1 h-1 bg-[#1e40af] rounded-full flex-shrink-0" />
+                                {match.match_name}
+                                {match.distance && <span className="text-gray-400">• {match.distance}</span>}
+                                {match.match_date && <span className="text-gray-400">• {format(new Date(match.match_date), 'MMM d')}</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
                     <Link
-                      href={`/events/${comp.id}`}
-                      className="text-sm text-[#1e40af] hover:underline inline-flex items-center gap-1 mt-1"
+                      href={`/events/${entry.competition.id}`}
+                      className="text-sm text-[#1e40af] hover:underline inline-flex items-center gap-1 mt-2"
                     >
                       View Details <ArrowRight className="h-3 w-3" />
                     </Link>
