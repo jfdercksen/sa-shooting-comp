@@ -235,40 +235,114 @@ export default function DashboardPage() {
 
   const membershipStatus = getMembershipStatus()
 
+  const getGreeting = () => {
+    const hour = new Date().getHours()
+    if (hour < 12) return 'Good morning'
+    if (hour < 18) return 'Good afternoon'
+    return 'Good evening'
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto">
-        {/* Welcome Section */}
-        <div className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] rounded-lg shadow-md p-8 mb-8 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold mb-2">
-                Welcome back, {profile?.full_names?.split(' ')[0] || 'Shooter'}!
-              </h1>
-              <div className="flex items-center gap-4 mt-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-200">SABU Number:</span>
-                  <span className="font-semibold text-lg">{profile?.sabu_number || 'N/A'}</span>
-                </div>
-                <div className={`px-3 py-1 rounded-full text-sm font-semibold ${membershipStatus.color}`}>
-                  {membershipStatus.label}
+        {/* Mobile-First Welcome Section */}
+        <div className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white">
+          <div className="px-4 py-6 md:px-8 md:py-8">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <h1 className="text-xl md:text-3xl font-bold mb-2">
+                  {getGreeting()}, {profile?.full_names?.split(' ')[0] || 'Shooter'}!
+                </h1>
+                <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 mt-2">
+                  <div className="flex items-center gap-2 text-sm md:text-base">
+                    <span className="text-gray-200">SABU:</span>
+                    <span className="font-semibold">{profile?.sabu_number || 'N/A'}</span>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-xs md:text-sm font-semibold self-start ${membershipStatus.color}`}>
+                    {membershipStatus.label}
+                  </div>
                 </div>
               </div>
+              {profile?.profile_image && (
+                <div className="ml-4">
+                  <img
+                    src={profile.profile_image}
+                    alt={profile.full_names}
+                    className="w-12 h-12 md:w-24 md:h-24 rounded-full border-2 md:border-4 border-white object-cover"
+                  />
+                </div>
+              )}
             </div>
-            {profile?.profile_image && (
-              <div className="hidden md:block">
-                <img
-                  src={profile.profile_image}
-                  alt={profile.full_names}
-                  className="w-24 h-24 rounded-full border-4 border-white object-cover"
-                />
-              </div>
-            )}
           </div>
         </div>
 
-        {/* My Activity Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {/* Stats Cards - Mobile First */}
+        <div className="px-4 -mt-4 md:mt-0 md:px-8 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
+            <StatCard
+              title="My Events"
+              value={upcomingCompetitions.length}
+              icon={<Calendar className="h-5 w-5 md:h-6 md:w-6" />}
+              color="bg-blue-500"
+            />
+            <StatCard
+              title="Recent Scores"
+              value={recentScores.length}
+              icon={<Target className="h-5 w-5 md:h-6 md:w-6" />}
+              color="bg-green-500"
+            />
+            <StatCard
+              title="My Teams"
+              value={teams.length}
+              icon={<Users className="h-5 w-5 md:h-6 md:w-6" />}
+              color="bg-purple-500"
+            />
+            <StatCard
+              title="Notifications"
+              value={notifications.length}
+              icon={<Bell className="h-5 w-5 md:h-6 md:w-6" />}
+              color="bg-yellow-500"
+              badge={notifications.length > 0}
+            />
+          </div>
+        </div>
+
+        {/* Mobile-Optimized Content */}
+        <div className="px-4 md:px-8 space-y-6 pb-20 md:pb-8">
+        
+        {/* Quick Actions - Mobile Priority */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
+          <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+            <QuickActionCard
+              href="/events"
+              icon={<Plus className="h-5 w-5 md:h-6 md:w-6 text-[#1e40af]" />}
+              title="Register"
+              subtitle="for Event"
+            />
+            <QuickActionCard
+              href="/scoring"
+              icon={<Target className="h-5 w-5 md:h-6 md:w-6 text-green-600" />}
+              title="Submit"
+              subtitle="Scores"
+            />
+            <QuickActionCard
+              href="/results"
+              icon={<Trophy className="h-5 w-5 md:h-6 md:w-6 text-amber-600" />}
+              title="View"
+              subtitle="Results"
+            />
+            <QuickActionCard
+              href="/profile"
+              icon={<FileText className="h-5 w-5 md:h-6 md:w-6 text-purple-600" />}
+              title="Update"
+              subtitle="Profile"
+            />
+          </div>
+        </div>
+
+        {/* Activity Cards - Condensed for Mobile */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           {/* Upcoming Competitions & Matches */}
           <ActivityCard
             title="Upcoming Competitions"
@@ -426,56 +500,227 @@ export default function DashboardPage() {
           </ActivityCard>
         </div>
 
-        {/* My Registrations Section */}
-        <MyRegistrationsSection />
-
-        {/* Quick Actions */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Link
-              href="/events"
-              className="flex flex-col items-center gap-3 p-6 border border-gray-200 rounded-lg hover:border-[#1e40af] hover:bg-blue-50 transition-colors"
-            >
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Plus className="h-6 w-6 text-[#1e40af]" />
-              </div>
-              <span className="font-medium text-gray-900 text-center">Register for Competition</span>
-            </Link>
-            <Link
-              href="/scoring"
-              className="flex flex-col items-center gap-3 p-6 border border-gray-200 rounded-lg hover:border-[#1e40af] hover:bg-blue-50 transition-colors"
-            >
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <Target className="h-6 w-6 text-green-600" />
-              </div>
-              <span className="font-medium text-gray-900 text-center">Submit Scores</span>
-            </Link>
-            <Link
-              href="/results"
-              className="flex flex-col items-center gap-3 p-6 border border-gray-200 rounded-lg hover:border-[#1e40af] hover:bg-blue-50 transition-colors"
-            >
-              <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
-                <Trophy className="h-6 w-6 text-amber-600" />
-              </div>
-              <span className="font-medium text-gray-900 text-center">View Results</span>
-            </Link>
-            <Link
-              href="/profile"
-              className="flex flex-col items-center gap-3 p-6 border border-gray-200 rounded-lg hover:border-[#1e40af] hover:bg-blue-50 transition-colors"
-            >
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <FileText className="h-6 w-6 text-purple-600" />
-              </div>
-              <span className="font-medium text-gray-900 text-center">Update Profile</span>
-            </Link>
-          </div>
+          {/* My Registrations Section - Mobile Optimized */}
+          <MobileRegistrationsSection />
+          
         </div>
       </div>
     </div>
   )
 }
 
+// Mobile-First Stats Card
+function StatCard({
+  title,
+  value,
+  icon,
+  color,
+  badge = false
+}: {
+  title: string
+  value: number
+  icon: React.ReactNode
+  color: string
+  badge?: boolean
+}) {
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 md:p-4 relative">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs md:text-sm text-gray-600 font-medium">{title}</p>
+          <p className="text-lg md:text-2xl font-bold text-gray-900 mt-1">{value}</p>
+        </div>
+        <div className={`${color} rounded-lg p-2 text-white relative`}>
+          {icon}
+          {badge && value > 0 && (
+            <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+              {value > 9 ? '9+' : value}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Quick Action Card
+function QuickActionCard({
+  href,
+  icon,
+  title,
+  subtitle
+}: {
+  href: string
+  icon: React.ReactNode
+  title: string
+  subtitle: string
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex flex-col items-center gap-2 p-3 md:p-4 border border-gray-200 rounded-lg hover:border-[#1e40af] hover:bg-blue-50 transition-colors active:scale-95"
+    >
+      <div className="w-10 h-10 md:w-12 md:h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+        {icon}
+      </div>
+      <div className="text-center">
+        <p className="font-semibold text-gray-900 text-sm md:text-base">{title}</p>
+        <p className="text-xs md:text-sm text-gray-600">{subtitle}</p>
+      </div>
+    </Link>
+  )
+}
+
+// Mobile-optimized registrations section
+function MobileRegistrationsSection() {
+  const [registrations, setRegistrations] = useState<Array<Registration & { competition: Competition | null; discipline: any }>>([])
+  const [loading, setLoading] = useState(true)
+  const supabase = createClient()
+
+  useEffect(() => {
+    loadRegistrations()
+  }, [])
+
+  async function loadRegistrations() {
+    setLoading(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: regsData } = await supabase
+        .from('registrations')
+        .select(`
+          *,
+          competitions (
+            id,
+            name,
+            start_date,
+            end_date,
+            slug
+          ),
+          disciplines (
+            id,
+            name,
+            color
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('registered_at', { ascending: false })
+        .limit(5) // Limit for mobile
+
+      const regs = (regsData || []).map((reg: any) => ({
+        ...reg,
+        competition: reg.competitions || null,
+        discipline: reg.disciplines || null,
+      }))
+
+      setRegistrations(regs)
+    } catch (error) {
+      console.error('Error loading registrations:', error)
+      toast.error('Failed to load registrations')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function getStatusBadge(status: string | null) {
+    switch (status) {
+      case 'confirmed':
+        return <span className="px-2 py-1 text-xs font-semibold bg-green-100 text-green-800 rounded-full">Confirmed</span>
+      case 'pending':
+        return <span className="px-2 py-1 text-xs font-semibold bg-yellow-100 text-yellow-800 rounded-full">Pending</span>
+      case 'draft':
+        return <span className="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-800 rounded-full">Draft</span>
+      default:
+        return <span className="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-800 rounded-full">{status || 'Unknown'}</span>
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div className="flex items-center justify-center py-8">
+          <div className="w-6 h-6 border-2 border-gray-300 border-t-[#1e40af] rounded-full animate-spin" />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold text-gray-900">My Registrations</h2>
+        <Link
+          href="/my-registrations"
+          className="text-sm text-[#1e40af] hover:underline"
+        >
+          View All
+        </Link>
+      </div>
+
+      {registrations.length === 0 ? (
+        <div className="text-center py-8">
+          <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+          <p className="text-gray-600 mb-2">No registrations yet</p>
+          <Link
+            href="/events"
+            className="inline-flex items-center px-4 py-2 bg-[#1e40af] text-white rounded-lg hover:bg-[#1e3a8a] transition-colors text-sm"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Browse Events
+          </Link>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {registrations.map((reg) => (
+            <div key={reg.id} className="border border-gray-200 rounded-lg p-3">
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-gray-900 text-sm truncate">
+                    {reg.competition?.name || 'Unknown Competition'}
+                  </h3>
+                  {reg.competition && (
+                    <p className="text-xs text-gray-600">
+                      {format(new Date(reg.competition.start_date), 'MMM d')} -{' '}
+                      {format(new Date(reg.competition.end_date), 'MMM d, yyyy')}
+                    </p>
+                  )}
+                </div>
+                {getStatusBadge(reg.registration_status)}
+              </div>
+              
+              <div className="flex items-center justify-between text-xs text-gray-600">
+                <div className="flex items-center">
+                  {reg.discipline?.color && (
+                    <div
+                      className="w-2 h-2 rounded-full mr-2"
+                      style={{ backgroundColor: reg.discipline.color }}
+                    />
+                  )}
+                  <span>{reg.discipline?.name || 'N/A'}</span>
+                </div>
+                {reg.entry_number && (
+                  <span className="font-mono">#{reg.entry_number}</span>
+                )}
+              </div>
+            </div>
+          ))}
+          
+          {registrations.length >= 5 && (
+            <Link
+              href="/my-registrations"
+              className="block text-center py-2 text-sm text-[#1e40af] hover:underline"
+            >
+              View All Registrations
+            </Link>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Keep original ActivityCard for desktop compatibility
 function ActivityCard({
   title,
   icon,
@@ -517,190 +762,4 @@ function ActivityCard({
   )
 }
 
-function MyRegistrationsSection() {
-  const [registrations, setRegistrations] = useState<Array<Registration & { competition: Competition | null; discipline: any }>>([])
-  const [loading, setLoading] = useState(true)
-  const supabase = createClient()
 
-  useEffect(() => {
-    loadRegistrations()
-  }, [])
-
-  async function loadRegistrations() {
-    setLoading(true)
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: regsData } = await supabase
-        .from('registrations')
-        .select(`
-          *,
-          competitions (
-            id,
-            name,
-            start_date,
-            end_date,
-            slug
-          ),
-          disciplines (
-            id,
-            name,
-            color
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('registered_at', { ascending: false })
-
-      const regs = (regsData || []).map((reg: any) => ({
-        ...reg,
-        competition: reg.competitions || null,
-        discipline: reg.disciplines || null,
-      }))
-
-      setRegistrations(regs)
-    } catch (error) {
-      console.error('Error loading registrations:', error)
-      toast.error('Failed to load registrations')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  function getStatusBadge(status: string | null) {
-    switch (status) {
-      case 'confirmed':
-        return <span className="px-2 py-1 text-xs font-semibold bg-green-100 text-green-800 rounded-full">Confirmed</span>
-      case 'pending':
-        return <span className="px-2 py-1 text-xs font-semibold bg-yellow-100 text-yellow-800 rounded-full">Pending</span>
-      case 'draft':
-        return <span className="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-800 rounded-full">Draft</span>
-      default:
-        return <span className="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-800 rounded-full">{status || 'Unknown'}</span>
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="flex items-center justify-center py-8">
-          <div className="w-8 h-8 border-2 border-gray-300 border-t-[#1e40af] rounded-full animate-spin" />
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="bg-white rounded-lg shadow-md p-6 mt-8">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-[#1e40af]">
-            <FileText className="h-6 w-6" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">My Registrations</h2>
-            <p className="text-sm text-gray-600">{new Set(registrations.map(r => r.competition?.id).filter(Boolean)).size} registration{new Set(registrations.map(r => r.competition?.id).filter(Boolean)).size !== 1 ? 's' : ''}</p>
-          </div>
-        </div>
-        <Link
-          href="/events"
-          className="text-sm text-[#1e40af] hover:underline inline-flex items-center gap-1"
-        >
-          Register for Competition <ArrowRight className="h-3 w-3" />
-        </Link>
-      </div>
-
-      {registrations.length === 0 ? (
-        <div className="text-center py-12">
-          <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 mb-2">No registrations yet</p>
-          <p className="text-sm text-gray-500 mb-4">Register for a competition to get started</p>
-          <Link
-            href="/events"
-            className="inline-flex items-center px-4 py-2 bg-[#1e40af] text-white rounded-lg hover:bg-[#1e3a8a] transition-colors"
-          >
-            <Plus className="h-5 w-5 mr-2" />
-            Browse Competitions
-          </Link>
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Competition
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Discipline
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Entry Number
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Registered
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {registrations.map((reg) => (
-                <tr key={reg.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {reg.competition?.name || 'Unknown Competition'}
-                    </div>
-                    {reg.competition && (
-                      <div className="text-sm text-gray-500">
-                        {format(new Date(reg.competition.start_date), 'MMM d')} -{' '}
-                        {format(new Date(reg.competition.end_date), 'MMM d, yyyy')}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      {reg.discipline?.color && (
-                        <div
-                          className="w-3 h-3 rounded-full mr-2"
-                          style={{ backgroundColor: reg.discipline.color }}
-                        />
-                      )}
-                      <span className="text-sm text-gray-900">{reg.discipline?.name || 'N/A'}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-mono text-gray-900">{reg.entry_number || 'N/A'}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {getStatusBadge(reg.registration_status)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-600">
-                      {reg.registered_at ? format(new Date(reg.registered_at), 'MMM d, yyyy') : 'N/A'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    {reg.competition && (
-                      <Link
-                        href={`/scoring?competition=${reg.competition.id}`}
-                        className="text-[#1e40af] hover:text-[#1e3a8a] inline-flex items-center"
-                      >
-                        <Target className="h-4 w-4 mr-1" />
-                        Submit Scores
-                      </Link>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  )
-}

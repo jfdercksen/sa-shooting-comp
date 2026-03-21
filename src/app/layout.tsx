@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import Navigation from "@/components/shared/navigation";
+import MobileBottomNavigation from "@/components/shared/mobile-bottom-nav";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -32,6 +33,7 @@ export default function RootLayout({
       >
         <Navigation />
         {children}
+        <MobileBottomNavigation />
         <Toaster position="top-right" />
       </body>
     </html>

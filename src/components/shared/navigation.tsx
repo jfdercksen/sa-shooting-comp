@@ -304,18 +304,20 @@ export default function Navigation() {
             )}
           </div>
 
-          {/* Mobile Menu Button */}
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="md:hidden p-2 rounded-md text-gray-700 hover:text-[#1e3a8a] hover:bg-gray-50"
-          >
-            {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </button>
+          {/* Mobile Menu Button - Hide if user is authenticated (bottom nav will handle) */}
+          {!user && (
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="md:hidden p-2 rounded-md text-gray-700 hover:text-[#1e3a8a] hover:bg-gray-50"
+            >
+              {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Mobile Menu */}
-      {isMobileMenuOpen && (
+      {/* Mobile Menu - Only show for unauthenticated users */}
+      {isMobileMenuOpen && !user && (
         <div className="md:hidden border-t border-gray-200">
           <div className="px-4 py-2 space-y-1">
             <MobileNavLink href="/" icon={<Home className="h-4 w-4" />} onClick={() => setIsMobileMenuOpen(false)}>

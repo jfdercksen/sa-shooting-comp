@@ -5,8 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Trophy, Search, Download, Printer, RefreshCw, Medal, Award } from 'lucide-react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import jsPDF from 'jspdf'
-import html2canvas from 'html2canvas'
+
 import type { Database } from '@/types/database'
 
 type Competition = Database['public']['Tables']['competitions']['Row']
@@ -650,21 +649,7 @@ export default function ResultsPage() {
     setRefreshing(false)
   }
 
-  const handleExportPDF = async () => {
-    if (!resultsRef.current) return
-
-    toast.info('Generating PDF...')
-    const canvas = await html2canvas(resultsRef.current)
-    const imgData = canvas.toDataURL('image/png')
-
-    const pdf = new jsPDF('landscape', 'mm', 'a4')
-    const imgWidth = 297 // A4 width in mm
-    const imgHeight = (canvas.height * imgWidth) / canvas.width
-    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight)
-    pdf.save(`results-${selectedCompetition}-${format(new Date(), 'yyyy-MM-dd')}.pdf`)
-
-    toast.success('PDF exported successfully')
-  }
+  // PDF export removed for security - use browser print instead
 
   const handleExportCSV = () => {
     const headers = [
@@ -969,14 +954,7 @@ export default function ResultsPage() {
             </div>
 
             {/* Export Buttons */}
-            <div className="flex flex-wrap gap-2 mb-6 no-print">
-              <button
-                onClick={handleExportPDF}
-                className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Export PDF
-              </button>
+            <div className="flex flex-wrap gap-2 mb-6 no-print">{/* PDF export removed - use Print button instead */}
               <button
                 onClick={handleExportCSV}
                 className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
