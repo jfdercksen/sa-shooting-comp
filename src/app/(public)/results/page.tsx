@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Trophy, Search, Download, Printer, RefreshCw, Medal, Award } from 'lucide-react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
+import MobileResults from '@/components/results/mobile-results'
 
 import type { Database } from '@/types/database'
 
@@ -50,8 +51,20 @@ export default function ResultsPage() {
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const resultsRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   useEffect(() => {
     fetchUser()
@@ -789,6 +802,48 @@ export default function ResultsPage() {
     )
   }
 
+  const handleRefresh = () => {
+    setRefreshing(true)
+    if (viewMode === 'team') {
+      fetchTeamResults().finally(() => setRefreshing(false))
+    } else {
+      fetchResults().finally(() => setRefreshing(false))
+    }
+  }
+
+  // Mobile interface
+  if (isMobile) {
+    return (
+      <MobileResults
+        competitions={competitions}
+        selectedCompetition={selectedCompetition}
+        setSelectedCompetition={setSelectedCompetition}
+        results={filteredResults}
+        teamResults={teamResults}
+        competitionTotals={competitionTotals}
+        stages={stages}
+        disciplines={disciplines}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        selectedDiscipline={selectedDiscipline}
+        setSelectedDiscipline={setSelectedDiscipline}
+        selectedAgeClass={selectedAgeClass}
+        setSelectedAgeClass={setSelectedAgeClass}
+        autoRefresh={autoRefresh}
+        setAutoRefresh={setAutoRefresh}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        onExportCSV={handleExportCSV}
+        onPrint={handlePrint}
+        loading={loading}
+        user={user}
+      />
+    )
+  }
+
+  // Desktop interface
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}

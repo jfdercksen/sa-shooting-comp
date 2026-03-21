@@ -6,6 +6,7 @@ import { Trophy, Target, Save, CheckCircle, Clock, XCircle, Edit, Users } from '
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import type { Database } from '@/types/database'
+import MobileScoringPage from '@/components/scoring/mobile-scoring-page'
 
 type Registration = Database['public']['Tables']['registrations']['Row']
 type Stage = Database['public']['Tables']['stages']['Row']
@@ -176,7 +177,19 @@ export default function ScoringPage() {
   const [stageScores, setStageScores] = useState<Record<string, StageScore>>({})
   const [saving, setSaving] = useState(false)
   const [editingScoreId, setEditingScoreId] = useState<string | null>(null)
+  const [isMobile, setIsMobile] = useState(false)
   const supabase = createClient()
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   useEffect(() => {
     fetchData()
@@ -511,6 +524,21 @@ export default function ScoringPage() {
     })
   }
 
+  const updateStageFlag = (stageId: string, field: 'isDNF' | 'isDQ', value: boolean) => {
+    const current = stageScores[stageId]
+    if (!current) return
+
+    setStageScores({
+      ...stageScores,
+      [stageId]: {
+        ...current,
+        [field]: value,
+        // Clear the other flag
+        [field === 'isDNF' ? 'isDQ' : 'isDNF']: false,
+      },
+    })
+  }
+
   const handleSubmit = async (stageId?: string) => {
     if (!selectedRegistration) return
 
@@ -676,6 +704,25 @@ export default function ScoringPage() {
       )
     : []
 
+  // Mobile interface
+  if (isMobile) {
+    return (
+      <MobileScoringPage
+        registrations={registrations}
+        scoringStages={scoringStages}
+        submittedScores={submittedScores}
+        stageScores={stageScores}
+        setStageScores={setStageScores}
+        onScoreUpdate={updateRoundScore}
+        onSighterModeUpdate={updateSighterMode}
+        onSubmitScore={handleSubmit}
+        onFlagUpdate={updateStageFlag}
+        saving={saving}
+      />
+    )
+  }
+
+  // Desktop interface
   return (
     <div className="p-6 space-y-6">
       <div>
