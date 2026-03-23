@@ -425,7 +425,7 @@ export default function AdminVerifyScoresPage() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Competition</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event</label>
             <select
               value={filters.competitionId}
               onChange={(e) => {

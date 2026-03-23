@@ -178,7 +178,7 @@ export default function AdminDashboardPage() {
           <StatCard
             icon={<Calendar className="h-8 w-8" />}
             value={stats.competitionsThisMonth}
-            label="Competitions This Month"
+            label="Events This Month"
             color="bg-amber-100 text-amber-600"
             link="/admin/competitions"
           />
@@ -207,7 +207,7 @@ export default function AdminDashboardPage() {
               className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:border-[#1e40af] hover:bg-blue-50 transition-colors"
             >
               <Plus className="h-5 w-5 text-[#1e40af]" />
-              <span className="font-medium text-gray-900">Create Competition</span>
+              <span className="font-medium text-gray-900">Create Event</span>
             </Link>
             <Link
               href="/admin/disciplines"

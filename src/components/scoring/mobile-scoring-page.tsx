@@ -141,7 +141,7 @@ export default function MobileScoringPage({
       <div className="min-h-screen bg-gray-50 pb-20">
         {/* Header */}
         <div className="bg-white shadow-sm border-b border-gray-200 px-4 py-4">
-          <h1 className="text-xl font-bold text-gray-900">Select Competition</h1>
+          <h1 className="text-xl font-bold text-gray-900">Select Event</h1>
           <p className="text-sm text-gray-600 mt-1">Choose a competition to enter scores</p>
         </div>
 
@@ -150,7 +150,7 @@ export default function MobileScoringPage({
           {registrations.length === 0 ? (
             <div className="bg-white rounded-lg p-8 text-center shadow-sm border border-gray-200">
               <Trophy className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 mb-2">No Competitions</h3>
+              <h3 className="font-semibold text-gray-900 mb-2">No Events</h3>
               <p className="text-gray-600 text-sm">You are not registered for any competitions.</p>
             </div>
           ) : (

@@ -345,7 +345,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           {/* Upcoming Competitions & Matches */}
           <ActivityCard
-            title="Upcoming Competitions"
+            title="Upcoming Events"
             icon={<Calendar className="h-6 w-6" />}
             count={upcomingCompetitions.length}
             link="/events"

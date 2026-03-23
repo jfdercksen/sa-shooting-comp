@@ -113,14 +113,14 @@ export default function MobileResults({
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200 px-4 py-4">
-        <h1 className="text-xl font-bold text-gray-900">Competition Results</h1>
+        <h1 className="text-xl font-bold text-gray-900">Event Results</h1>
         <p className="text-sm text-gray-600 mt-1">Live standings with provisional scores</p>
       </div>
 
       {/* Competition Selector */}
       <div className="bg-white border-b border-gray-200 px-4 py-3">
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Select Competition
+          Select Event
         </label>
         <select
           value={selectedCompetition}

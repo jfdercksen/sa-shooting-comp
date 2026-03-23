@@ -273,7 +273,7 @@ export default function MyRegistrationsPage() {
             {/* Past Registrations */}
             {pastRegistrations.length > 0 && (
               <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Past Competitions</h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Past Events</h2>
                 <div className="space-y-4">
                   {pastRegistrations.map((reg) => (
                     <RegistrationCard key={reg.id} registration={reg} getStatusBadge={getStatusBadge} getPaymentStatusBadge={getPaymentStatusBadge} />

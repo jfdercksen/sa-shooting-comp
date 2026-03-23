@@ -849,7 +849,7 @@ export default function ResultsPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">Competition Results</h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">Event Results</h1>
           <p className="text-lg text-gray-600">Live standings — includes pending scores until verified by admin</p>
         </div>
       </div>
@@ -859,7 +859,7 @@ export default function ResultsPage() {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6 no-print">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Select Competition</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Select Event</label>
               <select
                 value={selectedCompetition}
                 onChange={(e) => {

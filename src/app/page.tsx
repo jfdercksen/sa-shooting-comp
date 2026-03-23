@@ -166,7 +166,7 @@ export default async function Home() {
       {featuredCompetition && (
         <section className="py-16 bg-gray-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">Featured Competition</h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">Featured Event</h2>
             <div className="bg-white rounded-lg shadow-xl overflow-hidden max-w-4xl mx-auto">
               <div className="p-8">
                 <div className="flex items-start justify-between mb-4">
@@ -222,7 +222,7 @@ export default async function Home() {
             <StatCard
               icon={<Trophy className="h-8 w-8" />}
               value={competitionsThisYear || 0}
-              label="Competitions This Year"
+              label="Events This Year"
               color="bg-amber-100 text-amber-600"
             />
             <StatCard
