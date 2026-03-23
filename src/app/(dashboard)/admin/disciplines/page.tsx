@@ -66,7 +66,7 @@ export default function AdminDisciplinesPage() {
       .eq('discipline_id', discipline.id)
       .order('stage_number', { ascending: true })
     if (error) {
-      toast.error('Error fetching stages')
+      toast.error('Error fetching distances')
     } else {
       setModalStages(data || [])
     }
@@ -90,12 +90,12 @@ export default function AdminDisciplinesPage() {
         const { error } = await supabase.from('stages').insert(inserts)
         if (error) throw error
       }
-      toast.success('Stages saved')
+      toast.success('Distances saved')
       setShowStagesModal(false)
       setStagesDiscipline(null)
       setModalStages([])
     } catch (error: any) {
-      toast.error(error.message || 'Error saving stages')
+      toast.error(error.message || 'Error saving distances')
     } finally {
       setSavingStages(false)
     }
