@@ -402,12 +402,12 @@ export default function AdminCompetitionsPage() {
         }
       }
 
-      toast.success(editingCompetitionId ? 'Competition updated successfully!' : 'Competition created successfully!')
+      toast.success(editingCompetitionId ? 'Event updated successfully!' : 'Event created successfully!')
       setShowForm(false)
       resetForm()
       fetchCompetitions() // Refresh the competitions list
     } catch (error: any) {
-      console.error('Error creating/updating competition:', error)
+      console.error('Error creating/updating event:', error)
       console.error('Error type:', typeof error)
       console.error('Error keys:', Object.keys(error || {}))
       console.error('Error details:', {
@@ -417,7 +417,7 @@ export default function AdminCompetitionsPage() {
         code: error?.code,
       })
       
-      let errorMessage = 'Error creating/updating competition'
+      let errorMessage = 'Error creating/updating event'
       
       if (error?.message) {
         errorMessage = error.message
@@ -595,7 +595,7 @@ export default function AdminCompetitionsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Events Management</h1>
-          <p className="text-gray-600 mt-1">Create and manage shooting competitions</p>
+          <p className="text-gray-600 mt-1">Create and manage shooting events</p>
         </div>
         <button
           onClick={() => {
@@ -605,7 +605,7 @@ export default function AdminCompetitionsPage() {
           className="flex items-center px-4 py-2 bg-[#1e40af] text-white rounded-lg hover:bg-[#1e3a8a] transition-colors"
         >
           <Plus className="h-5 w-5 mr-2" />
-          Create Competition
+          Create Event
         </button>
       </div>
 
@@ -615,8 +615,8 @@ export default function AdminCompetitionsPage() {
           {competitions.length === 0 ? (
             <div className="bg-white rounded-lg shadow-md p-12 text-center">
               <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">No competitions yet</h3>
-              <p className="text-gray-600 mb-6">Create your first competition to get started</p>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No events yet</h3>
+              <p className="text-gray-600 mb-6">Create your first event to get started</p>
             </div>
           ) : (
             <div className="bg-white rounded-lg shadow-md overflow-hidden">
@@ -625,7 +625,7 @@ export default function AdminCompetitionsPage() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Competition
+                        Event
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Dates
@@ -688,14 +688,14 @@ export default function AdminCompetitionsPage() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-[#1e40af] hover:text-[#1e3a8a]"
-                              title="View Competition"
+                              title="View Event"
                             >
                               View
                             </a>
                             <button
                               onClick={() => loadCompetitionForEdit(competition.id)}
                               className="text-[#1e40af] hover:text-[#1e3a8a]"
-                              title="Edit Competition"
+                              title="Edit Event"
                             >
                               Edit
                             </button>
@@ -708,16 +708,16 @@ export default function AdminCompetitionsPage() {
                                     .eq('id', competition.id)
                                   
                                   if (error) {
-                                    toast.error('Error deleting competition')
+                                    toast.error('Error deleting event')
                                     console.error(error)
                                   } else {
-                                    toast.success('Competition deleted')
+                                    toast.success('Event deleted')
                                     fetchCompetitions()
                                   }
                                 }
                               }}
                               className="text-red-600 hover:text-red-800"
-                              title="Delete Competition"
+                              title="Delete Event"
                             >
                               Delete
                             </button>
@@ -739,7 +739,7 @@ export default function AdminCompetitionsPage() {
           <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full my-8">
             <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex items-center justify-between z-10">
               <h2 className="text-2xl font-bold text-gray-900">
-                {editingCompetitionId ? 'Edit Competition' : 'Create Competition'}
+                {editingCompetitionId ? 'Edit Event' : 'Create Event'}
               </h2>
               <button
                 onClick={() => {
@@ -1252,7 +1252,7 @@ export default function AdminCompetitionsPage() {
                       className="h-4 w-4 text-[#1e40af] focus:ring-[#1e40af] border-gray-300 rounded"
                     />
                     <label htmlFor="is_featured" className="ml-2 text-sm font-medium text-gray-700">
-                      Featured Competition
+                      Featured Event
                     </label>
                   </div>
                 </div>
@@ -1283,7 +1283,7 @@ export default function AdminCompetitionsPage() {
                   ) : (
                     <>
                       <Save className="h-5 w-5 mr-2" />
-                      {editingCompetitionId ? 'Update Competition' : 'Create Competition'}
+                      {editingCompetitionId ? 'Update Event' : 'Create Event'}
                     </>
                   )}
                 </button>
