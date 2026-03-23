@@ -489,7 +489,7 @@ export default function ScoringPage() {
     })
   }
 
-  const updateSighterMode = (stageId: string, sighterMode: SighterMode) => {
+  const updateSighterMode = (stageId: string, sighterMode: string) => {
     const currentStage = selectedStages.find((stage) => stage.id === stageId)
     if (!currentStage) return
     const scoringRounds = currentStage.rounds || 10
