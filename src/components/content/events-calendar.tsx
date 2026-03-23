@@ -330,7 +330,7 @@ export default function EventsCalendar({ competitions, disciplines, competitionD
       {/* Calendar */}
       <div className="flex-1 bg-white rounded-lg shadow-md p-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-          <h2 className="text-2xl font-bold text-gray-900">Competition Calendar</h2>
+          <h2 className="text-2xl font-bold text-gray-900">Event Calendar</h2>
           <div className="flex gap-2">
             <button
               onClick={() => setView('month')}

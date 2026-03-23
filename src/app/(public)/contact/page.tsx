@@ -260,7 +260,7 @@ export default function ContactPage() {
                   className="flex items-center text-[#1e40af] hover:text-[#1e3a8a] transition-colors"
                 >
                   <Calendar className="h-5 w-5 mr-3" />
-                  <span>Competition Calendar</span>
+                  <span>Event Calendar</span>
                 </Link>
                 <Link
                   href="/register"
