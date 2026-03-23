@@ -824,7 +824,7 @@ export default function ResultsPage() {
         stages={stages}
         disciplines={disciplines}
         viewMode={viewMode}
-        setViewMode={setViewMode}
+        setViewMode={(mode: string) => setViewMode(mode as any)}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         selectedDiscipline={selectedDiscipline}
