@@ -479,7 +479,7 @@ export default function AdminDisciplinesPage() {
                   Order
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Stages
+                  Distances
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
@@ -531,7 +531,7 @@ export default function AdminDisciplinesPage() {
                       className="flex items-center text-[#1e40af] hover:text-[#1e3a8a] bg-blue-50 px-2 py-1 rounded border border-blue-200"
                     >
                       <Target className="h-4 w-4 mr-1" />
-                      Manage Stages
+                      Manage Distances
                     </button>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -563,7 +563,7 @@ export default function AdminDisciplinesPage() {
           <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
             <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Stages</h2>
+                <h2 className="text-2xl font-bold text-gray-900">Distances</h2>
                 <p className="text-sm text-gray-500 mt-1">{stagesDiscipline.name}</p>
               </div>
               <button
@@ -576,12 +576,12 @@ export default function AdminDisciplinesPage() {
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {modalStages.length === 0 && (
-                <p className="text-sm text-gray-500 italic">No stages yet. Click "Add Stage" to create one.</p>
+                <p className="text-sm text-gray-500 italic">No distances yet. Click "Add Distance" to create one.</p>
               )}
               {modalStages.map((stage, index) => (
                 <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-semibold text-gray-700">Stage {index + 1}</h4>
+                    <h4 className="font-semibold text-gray-700">Distance {index + 1}</h4>
                     <button
                       type="button"
                       onClick={() => {
@@ -596,7 +596,7 @@ export default function AdminDisciplinesPage() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Stage Name *</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Distance Name *</label>
                       <input
                         type="text"
                         value={stage.name || ''}
@@ -606,7 +606,7 @@ export default function AdminDisciplinesPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Stage Number</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Distance Number</label>
                       <input
                         type="number"
                         value={stage.stage_number || index + 1}
@@ -668,7 +668,7 @@ export default function AdminDisciplinesPage() {
                 className="flex items-center px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
               >
                 <Plus className="h-4 w-4 mr-1" />
-                Add Stage
+                Add Distance
               </button>
             </div>
 
@@ -687,7 +687,7 @@ export default function AdminDisciplinesPage() {
                 className="flex items-center px-6 py-2 bg-[#1e40af] text-white rounded-lg hover:bg-[#1e3a8a] transition-colors disabled:opacity-50"
               >
                 <Save className="h-4 w-4 mr-2" />
-                {savingStages ? 'Saving...' : 'Save Stages'}
+                {savingStages ? 'Saving...' : 'Save Distances'}
               </button>
             </div>
           </div>
