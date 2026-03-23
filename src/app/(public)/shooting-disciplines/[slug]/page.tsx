@@ -153,12 +153,12 @@ export default async function DisciplineDetailPage({
               </section>
             )}
 
-            {/* Stages */}
+            {/* Distances */}
             {stages && stages.length > 0 && (
               <section className="bg-white rounded-lg shadow-md p-6">
                 <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
                   <Target className="mr-2 h-6 w-6 text-[#1e40af]" />
-                  Stages
+                  Distances
                 </h2>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
