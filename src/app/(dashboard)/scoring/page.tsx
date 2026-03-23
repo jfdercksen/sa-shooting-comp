@@ -49,7 +49,7 @@ const getTotalShots = (stage: Stage) => {
   return scoringRounds + sighters
 }
 
-const getScoringWindow = (totalShots: number, scoringRounds: number, sighterMode: SighterMode) => {
+const getScoringWindow = (totalShots: number, scoringRounds: number, sighterMode: SighterMode | string) => {
   const preferredStart =
     sighterMode === 'count_sighter_1' ? 1 : sighterMode === 'count_sighter_2' ? 2 : 3
 
