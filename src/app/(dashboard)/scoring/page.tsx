@@ -514,7 +514,7 @@ export default function ScoringPage() {
       [stageId]: {
         stageId,
         rounds: normalizedRounds,
-        sighterMode,
+        sighterMode: sighterMode as SighterMode,
         totalScore: totals.totalScore,
         vCount: totals.vCount,
         isDNF: current?.isDNF || false,
