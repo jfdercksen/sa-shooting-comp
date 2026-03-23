@@ -442,7 +442,7 @@ export default function MobileResults({
                         {/* Expandable Stage Scores */}
                         {isExpanded && stages.length > 0 && (
                           <div className="border-t border-gray-200 p-4">
-                            <h4 className="text-sm font-medium text-gray-900 mb-3">Stage Breakdown</h4>
+                            <h4 className="text-sm font-medium text-gray-900 mb-3">Distance Breakdown</h4>
                             <div className="grid grid-cols-3 gap-2">
                               {stages.map((stage) => {
                                 const stageKey = `S${stage.stage_number}`

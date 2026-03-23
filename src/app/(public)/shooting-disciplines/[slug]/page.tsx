@@ -165,7 +165,7 @@ export default async function DisciplineDetailPage({
                     <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                       <tr>
                         <th className="px-4 py-3 text-left">#</th>
-                        <th className="px-4 py-3 text-left">Stage Name</th>
+                        <th className="px-4 py-3 text-left">Distance Name</th>
                         <th className="px-4 py-3 text-center">Distance</th>
                         <th className="px-4 py-3 text-center">Rounds</th>
                         <th className="px-4 py-3 text-center">Sighters</th>

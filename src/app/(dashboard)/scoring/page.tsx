@@ -789,7 +789,7 @@ export default function ScoringPage() {
           <div className="flex items-start">
             <Target className="h-6 w-6 text-yellow-600 mr-3 mt-1" />
             <div>
-              <h3 className="text-lg font-semibold text-yellow-900 mb-2">No Stages Available</h3>
+              <h3 className="text-lg font-semibold text-yellow-900 mb-2">No Distances Available</h3>
               <p className="text-yellow-800 mb-4">
                 This competition doesn't have any stages set up yet. Please contact the competition administrator to add stages before you can submit scores.
               </p>

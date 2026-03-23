@@ -459,7 +459,7 @@ export default function AdminVerifyScoresPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Stage</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Distance</label>
             <select
               value={filters.stageId}
               onChange={(e) => setFilters({ ...filters, stageId: e.target.value })}
