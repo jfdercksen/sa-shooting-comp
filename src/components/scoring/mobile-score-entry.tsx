@@ -92,11 +92,11 @@ export default function MobileScoreEntry({
   const typeInfo = getRoundTypeLabel(roundType)
 
   // Calculate completion percentage
-  const scoringRounds = stageScore.rounds.filter((r: any) => 
+  const scoringRoundsArray = stageScore.rounds.filter((r: any) => 
     r.round >= scoringWindow.start && r.round <= scoringWindow.end
   )
-  const completedRounds = scoringRounds.filter((r: any) => r.score > 0).length
-  const completionPercentage = scoringRounds.length > 0 ? (completedRounds / scoringRounds.length) * 100 : 0
+  const completedRounds = scoringRoundsArray.filter((r: any) => r.score > 0).length
+  const completionPercentage = scoringRoundsArray.length > 0 ? (completedRounds / scoringRoundsArray.length) * 100 : 0
 
   if (isVerified) {
     return (
@@ -141,7 +141,7 @@ export default function MobileScoreEntry({
         <div className="mt-3">
           <div className="flex justify-between items-center text-xs text-gray-600 mb-1">
             <span>Progress</span>
-            <span>{completedRounds} / {scoringRounds.length} shots</span>
+            <span>{completedRounds} / {scoringRoundsArray.length} shots</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div 
