@@ -77,7 +77,8 @@ export default function ResultsPage() {
   const [selectedAgeClass, setSelectedAgeClass] = useState<string>('')
   const [selectedMatch, setSelectedMatch] = useState<string>('')
   const [viewMode, setViewMode] = useState<'match' | 'team' | 'total' | 'annual'>('match')
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
+  const [championships, setChampionships] = useState<any[]>([])
+  const [selectedChampionship, setSelectedChampionship] = useState<string>('')
   const [annualResults, setAnnualResults] = useState<AnnualResult[]>([])
   const [yearCompetitions, setYearCompetitions] = useState<Competition[]>([])
   const [teamResults, setTeamResults] = useState<any[]>([])
@@ -98,6 +99,7 @@ export default function ResultsPage() {
   useEffect(() => {
     fetchUser()
     fetchCompetitions()
+    fetchChampionships()
   }, [])
 
   useEffect(() => {
@@ -123,7 +125,7 @@ export default function ResultsPage() {
 
   useEffect(() => {
     if (viewMode === 'annual') fetchAnnualResults()
-  }, [selectedYear])
+  }, [selectedChampionship])
 
   useEffect(() => {
     if (autoRefresh && selectedCompetition) {
@@ -178,6 +180,23 @@ export default function ResultsPage() {
       console.error('Error fetching competitions:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchChampionships = async () => {
+    try {
+      const { data } = await (supabase as any)
+        .from('championships')
+        .select('id, name, year')
+        .order('year', { ascending: false })
+      if (data) {
+        setChampionships(data)
+        if (data.length > 0 && !selectedChampionship) {
+          setSelectedChampionship(data[0].id)
+        }
+      }
+    } catch {
+      // championships table may not exist yet
     }
   }
 
@@ -358,14 +377,14 @@ export default function ResultsPage() {
   }
 
   const fetchAnnualResults = async () => {
+    if (!selectedChampionship) { setAnnualResults([]); setYearCompetitions([]); return }
     setLoading(true)
     try {
-      // 1. Get all competitions for the selected year
+      // 1. Get all events belonging to the selected championship
       const { data: yearComps } = await supabase
         .from('competitions')
         .select('*')
-        .gte('start_date', `${selectedYear}-01-01`)
-        .lte('start_date', `${selectedYear}-12-31`)
+        .eq('championship_id' as any, selectedChampionship)
         .order('start_date', { ascending: true })
 
       if (!yearComps || yearComps.length === 0) {
@@ -877,17 +896,18 @@ export default function ResultsPage() {
 
               {/* Filters */}
               <div className={`grid grid-cols-1 gap-4 ${viewMode === 'match' ? 'md:grid-cols-5' : viewMode === 'annual' ? 'md:grid-cols-4' : 'md:grid-cols-4'}`}>
-                {/* Year selector — Annual Standings only */}
+                {/* Championship selector — Annual Standings only */}
                 {viewMode === 'annual' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Year</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Championship</label>
                     <select
-                      value={selectedYear}
-                      onChange={(e) => setSelectedYear(Number(e.target.value))}
+                      value={selectedChampionship}
+                      onChange={(e) => setSelectedChampionship(e.target.value)}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
                     >
-                      {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
-                        <option key={year} value={year}>{year}</option>
+                      <option value="">Select a championship...</option>
+                      {championships.map((c: any) => (
+                        <option key={c.id} value={c.id}>{c.name} ({c.year})</option>
                       ))}
                     </select>
                   </div>
@@ -1010,14 +1030,18 @@ export default function ResultsPage() {
                 <div className="bg-white rounded-lg shadow-md p-12 text-center">
                   <Trophy className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-600 text-lg">
-                    {loading ? 'Loading...' : `No results found for ${selectedYear}`}
+                    {!selectedChampionship
+                      ? 'Select a championship above to view annual standings'
+                      : loading
+                      ? 'Loading...'
+                      : 'No results found for this championship'}
                   </p>
                 </div>
               ) : (
                 <div ref={resultsRef} className="bg-white rounded-lg shadow-md overflow-hidden">
                   <div className="p-4 border-b border-gray-200 bg-gray-50">
                     <h2 className="text-lg font-bold text-gray-900">
-                      Annual Standings — {selectedYear}
+                      {championships.find((c: any) => c.id === selectedChampionship)?.name || 'Annual Standings'}
                       {selectedDiscipline && disciplines.find(d => d.id === selectedDiscipline)
                         ? ` · ${disciplines.find(d => d.id === selectedDiscipline)?.name}`
                         : ''}

@@ -269,6 +269,30 @@ export default function EventRegistration({ competition, disciplines, matches, m
         }
       }
 
+      // Auto-enrol in championship if this event belongs to one
+      const championshipId = (competition as any).championship_id
+      if (championshipId) {
+        for (const disciplineId of formData.disciplineIds) {
+          const { error: crError } = await (supabase as any)
+            .from('championship_registrations')
+            .upsert(
+              {
+                championship_id: championshipId,
+                user_id: user.id,
+                discipline_id: disciplineId,
+                registration_status: 'pending',
+                payment_status: 'pending',
+                registered_at: new Date().toISOString(),
+              },
+              { onConflict: 'championship_id,user_id,discipline_id', ignoreDuplicates: true }
+            )
+          if (crError) {
+            // Non-fatal — log but don't block registration
+            console.error('Championship auto-enrol error:', crError)
+          }
+        }
+      }
+
       setEntryNumber(entryNum)
       setCurrentStep(6) // Success step
       toast.success('Registration submitted successfully!')

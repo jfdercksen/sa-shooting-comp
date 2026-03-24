@@ -190,9 +190,127 @@ export type Database = {
           },
         ]
       }
+      championship_registrations: {
+        Row: {
+          amount_paid: number | null
+          championship_id: string
+          created_at: string | null
+          discipline_id: string
+          id: string
+          payment_reference: string | null
+          payment_status: string | null
+          registered_at: string | null
+          registration_status: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          amount_paid?: number | null
+          championship_id: string
+          created_at?: string | null
+          discipline_id: string
+          id?: string
+          payment_reference?: string | null
+          payment_status?: string | null
+          registered_at?: string | null
+          registration_status?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          amount_paid?: number | null
+          championship_id?: string
+          created_at?: string | null
+          discipline_id?: string
+          id?: string
+          payment_reference?: string | null
+          payment_status?: string | null
+          registered_at?: string | null
+          registration_status?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "championship_registrations_championship_id_fkey"
+            columns: ["championship_id"]
+            isOneToOne: false
+            referencedRelation: "championships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "championship_registrations_discipline_id_fkey"
+            columns: ["discipline_id"]
+            isOneToOne: false
+            referencedRelation: "disciplines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "championship_registrations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      championships: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          registration_closes: string | null
+          registration_fee: number | null
+          registration_opens: string | null
+          slug: string
+          updated_at: string | null
+          year: number
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          registration_closes?: string | null
+          registration_fee?: number | null
+          registration_opens?: string | null
+          slug: string
+          updated_at?: string | null
+          year: number
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          registration_closes?: string | null
+          registration_fee?: number | null
+          registration_opens?: string | null
+          slug?: string
+          updated_at?: string | null
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "championships_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       competitions: {
         Row: {
           capacity: number | null
+          championship_id: string | null
           compulsory_range_fee: number | null
           created_at: string | null
           created_by: string | null
@@ -216,6 +334,7 @@ export type Database = {
         }
         Insert: {
           capacity?: number | null
+          championship_id?: string | null
           compulsory_range_fee?: number | null
           created_at?: string | null
           created_by?: string | null
@@ -239,6 +358,7 @@ export type Database = {
         }
         Update: {
           capacity?: number | null
+          championship_id?: string | null
           compulsory_range_fee?: number | null
           created_at?: string | null
           created_by?: string | null
@@ -260,7 +380,15 @@ export type Database = {
           updated_at?: string | null
           venue_details?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "competitions_championship_id_fkey"
+            columns: ["championship_id"]
+            isOneToOne: false
+            referencedRelation: "championships"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       contact_submissions: {
         Row: {

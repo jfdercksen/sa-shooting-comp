@@ -21,6 +21,7 @@ interface RegistrationWithDetails extends Registration {
 
 export default function MyRegistrationsPage() {
   const [registrations, setRegistrations] = useState<RegistrationWithDetails[]>([])
+  const [championshipRegs, setChampionshipRegs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'confirmed' | 'pending' | 'draft'>('all')
   const supabase = createClient()
@@ -62,7 +63,8 @@ export default function MyRegistrationsPage() {
             end_date,
             slug,
             location,
-            venue_details
+            venue_details,
+            championship_id
           ),
           disciplines (
             id,
@@ -77,6 +79,20 @@ export default function MyRegistrationsPage() {
         `)
         .eq('user_id', user.id)
         .order('registered_at', { ascending: false })
+
+      // Fetch championship registrations (for outstanding fee notices)
+      const { data: champRegs } = await (supabase as any)
+        .from('championship_registrations')
+        .select(`
+          id,
+          championship_id,
+          discipline_id,
+          registration_status,
+          payment_status,
+          championships (id, name, year, registration_fee)
+        `)
+        .eq('user_id', user.id)
+      setChampionshipRegs(champRegs || [])
 
       if (error) throw error
 
@@ -219,6 +235,32 @@ export default function MyRegistrationsPage() {
           </div>
         </div>
 
+        {/* Outstanding Championship Fees */}
+        {championshipRegs.filter(cr => cr.payment_status === 'pending').length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+            <h3 className="text-sm font-semibold text-amber-800 mb-2">⚠ Outstanding Championship Series Fees</h3>
+            <div className="space-y-2">
+              {championshipRegs
+                .filter(cr => cr.payment_status === 'pending')
+                .map(cr => (
+                  <div key={cr.id} className="flex items-center justify-between text-sm">
+                    <span className="text-amber-800">
+                      {cr.championships?.name || 'Championship'} ({cr.championships?.year})
+                    </span>
+                    {cr.championships?.registration_fee != null && (
+                      <span className="font-semibold text-amber-900">
+                        R{Number(cr.championships.registration_fee).toFixed(2)} outstanding
+                      </span>
+                    )}
+                  </div>
+                ))}
+            </div>
+            <p className="text-xs text-amber-700 mt-2">
+              Please contact the organisers to complete your championship registration payment.
+            </p>
+          </div>
+        )}
+
         {/* Filters */}
         <div className="bg-white rounded-lg shadow-md p-4 mb-6">
           <div className="flex gap-2">
@@ -263,9 +305,11 @@ export default function MyRegistrationsPage() {
               <div>
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Upcoming Matches</h2>
                 <div className="space-y-4">
-                  {upcomingRegistrations.map((reg) => (
-                    <RegistrationCard key={reg.id} registration={reg} getStatusBadge={getStatusBadge} getPaymentStatusBadge={getPaymentStatusBadge} />
-                  ))}
+                  {upcomingRegistrations.map((reg) => {
+                    const champId = (reg.competition as any)?.championship_id
+                    const champReg = champId ? championshipRegs.find(cr => cr.championship_id === champId) : null
+                    return <RegistrationCard key={reg.id} registration={reg} championshipName={champReg?.championships?.name} getStatusBadge={getStatusBadge} getPaymentStatusBadge={getPaymentStatusBadge} />
+                  })}
                 </div>
               </div>
             )}
@@ -275,9 +319,11 @@ export default function MyRegistrationsPage() {
               <div>
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Past Events</h2>
                 <div className="space-y-4">
-                  {pastRegistrations.map((reg) => (
-                    <RegistrationCard key={reg.id} registration={reg} getStatusBadge={getStatusBadge} getPaymentStatusBadge={getPaymentStatusBadge} />
-                  ))}
+                  {pastRegistrations.map((reg) => {
+                    const champId = (reg.competition as any)?.championship_id
+                    const champReg = champId ? championshipRegs.find(cr => cr.championship_id === champId) : null
+                    return <RegistrationCard key={reg.id} registration={reg} championshipName={champReg?.championships?.name} getStatusBadge={getStatusBadge} getPaymentStatusBadge={getPaymentStatusBadge} />
+                  })}
                 </div>
               </div>
             )}
@@ -290,10 +336,12 @@ export default function MyRegistrationsPage() {
 
 function RegistrationCard({
   registration,
+  championshipName,
   getStatusBadge,
   getPaymentStatusBadge,
 }: {
   registration: RegistrationWithDetails
+  championshipName?: string
   getStatusBadge: (status: string | null) => React.ReactNode
   getPaymentStatusBadge: (status: string | null) => React.ReactNode
 }) {
@@ -307,6 +355,11 @@ function RegistrationCard({
         <div className="flex-1">
           <div className="flex items-start justify-between mb-3">
             <div>
+              {championshipName && (
+                <div className="text-xs font-medium text-[#1e40af] mb-1 uppercase tracking-wide">
+                  {championshipName}
+                </div>
+              )}
               <h3 className="text-lg font-bold text-gray-900 mb-1">
                 {registration.competition?.name || 'Unknown Competition'}
               </h3>

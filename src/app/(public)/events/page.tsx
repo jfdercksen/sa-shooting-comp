@@ -26,12 +26,19 @@ export default async function EventsPage() {
       discipline_id,
       disciplines (*)
     `)
-  
+
   // Filter out null values and ensure required fields are present
   const competitionDisciplines = (competitionDisciplinesRaw || []).filter(
-    (cd): cd is NonNullable<typeof cd> & { competition_id: string; discipline_id: string } => 
+    (cd): cd is NonNullable<typeof cd> & { competition_id: string; discipline_id: string } =>
       cd !== null && cd.competition_id !== null && cd.discipline_id !== null
   )
+
+  // Fetch championships for the series filter
+  const { data: championships } = await (supabase as any)
+    .from('championships')
+    .select('id, name, year')
+    .eq('is_active', true)
+    .order('year', { ascending: false })
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -47,6 +54,7 @@ export default async function EventsPage() {
           competitions={competitions || []}
           disciplines={disciplines || []}
           competitionDisciplines={competitionDisciplines}
+          championships={championships || []}
         />
       </div>
     </div>

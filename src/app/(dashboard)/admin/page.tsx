@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Users, Calendar, CheckCircle, Mail, Plus, FileText, ClipboardList, Download, TrendingUp, Target } from 'lucide-react'
+import { Users, Calendar, CheckCircle, Mail, Plus, FileText, ClipboardList, Download, TrendingUp, Target, Trophy } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
@@ -201,7 +201,14 @@ export default function AdminDashboardPage() {
         {/* Quick Actions */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+            <Link
+              href="/admin/championships"
+              className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:border-[#1e40af] hover:bg-blue-50 transition-colors"
+            >
+              <Trophy className="h-5 w-5 text-[#1e40af]" />
+              <span className="font-medium text-gray-900">Championships</span>
+            </Link>
             <Link
               href="/admin/competitions"
               className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:border-[#1e40af] hover:bg-blue-50 transition-colors"

@@ -43,6 +43,7 @@ const emptyStageForm = (): StageFormData => ({ name: '', distance: '', sighters:
 export default function AdminCompetitionsPage() {
   const [competitions, setCompetitions] = useState<Competition[]>([])
   const [disciplines, setDisciplines] = useState<Discipline[]>([])
+  const [championships, setChampionships] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
@@ -67,6 +68,7 @@ export default function AdminCompetitionsPage() {
   const [formData, setFormData] = useState<Partial<CompetitionInsert>>({
     name: '',
     slug: '',
+    championship_id: null,
     start_date: '',
     end_date: '',
     location: '',
@@ -86,6 +88,7 @@ export default function AdminCompetitionsPage() {
   useEffect(() => {
     fetchDisciplines()
     fetchCompetitions()
+    fetchChampionships()
   }, [])
 
   const fetchDisciplines = async () => {
@@ -101,6 +104,15 @@ export default function AdminCompetitionsPage() {
     } else {
       setDisciplines(data || [])
     }
+  }
+
+  const fetchChampionships = async () => {
+    const { data } = await (supabase as any)
+      .from('championships')
+      .select('id, name, year')
+      .eq('is_active', true)
+      .order('year', { ascending: false })
+    if (data) setChampionships(data)
   }
 
   const fetchCompetitions = async () => {
@@ -366,6 +378,7 @@ export default function AdminCompetitionsPage() {
       const competitionData: CompetitionInsert = {
         name: formData.name!,
         slug: formData.slug || generateSlug(formData.name!),
+        championship_id: formData.championship_id || null,
         start_date: formData.start_date!,
         end_date: formData.end_date!,
         location: formData.location!,
@@ -534,6 +547,7 @@ export default function AdminCompetitionsPage() {
       setFormData({
         name: competition.name,
         slug: competition.slug,
+        championship_id: (competition as any).championship_id || null,
         start_date: competition.start_date.split('T')[0],
         end_date: competition.end_date.split('T')[0],
         location: competition.location,
@@ -606,6 +620,7 @@ export default function AdminCompetitionsPage() {
     setFormData({
       name: '',
       slug: '',
+      championship_id: null,
       start_date: '',
       end_date: '',
       location: '',
@@ -793,6 +808,19 @@ export default function AdminCompetitionsPage() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
                       required
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Championship (Series)</label>
+                    <select
+                      value={formData.championship_id || ''}
+                      onChange={(e) => setFormData({ ...formData, championship_id: e.target.value || null })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                    >
+                      <option value="">— No championship —</option>
+                      {championships.map((c: any) => (
+                        <option key={c.id} value={c.id}>{c.name} ({c.year})</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Start Date *</label>

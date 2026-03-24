@@ -63,14 +63,16 @@ interface EventsCalendarProps {
     discipline_id: string
     disciplines: Discipline | null
   }>
+  championships?: Array<{ id: string; name: string; year: number }>
 }
 
-export default function EventsCalendar({ competitions, disciplines, competitionDisciplines }: EventsCalendarProps) {
+export default function EventsCalendar({ competitions, disciplines, competitionDisciplines, championships = [] }: EventsCalendarProps) {
   const [view, setView] = useState<View | null>(null)
   const [date, setDate] = useState(new Date())
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
   const [selectedDisciplines, setSelectedDisciplines] = useState<string[]>([])
   const [selectedProvince, setSelectedProvince] = useState<string>('')
+  const [selectedChampionship, setSelectedChampionship] = useState<string>('')
 
   // Create a map of competition_id to disciplines
   const competitionDisciplineMap = useMemo(() => {
@@ -112,6 +114,11 @@ export default function EventsCalendar({ competitions, disciplines, competitionD
           return false
         }
 
+        // Filter by championship
+        if (selectedChampionship && (comp as any).championship_id !== selectedChampionship) {
+          return false
+        }
+
         return comp.is_active
       })
       .map((comp) => {
@@ -131,7 +138,7 @@ export default function EventsCalendar({ competitions, disciplines, competitionD
           },
         }
       })
-  }, [competitions, competitionDisciplineMap, selectedDisciplines, selectedProvince])
+  }, [competitions, competitionDisciplineMap, selectedDisciplines, selectedProvince, selectedChampionship])
 
   // Get upcoming events (next 5)
   const upcomingEvents = useMemo(() => {
@@ -316,6 +323,25 @@ export default function EventsCalendar({ competitions, disciplines, competitionD
               ))}
             </select>
           </div>
+
+          {/* Championship Filter */}
+          {championships.length > 0 && (
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Championship / Series</label>
+              <select
+                value={selectedChampionship}
+                onChange={(e) => setSelectedChampionship(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+              >
+                <option value="">All Championships</option>
+                {championships.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.year})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Export Button */}
           <button
