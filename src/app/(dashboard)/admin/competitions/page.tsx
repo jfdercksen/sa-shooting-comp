@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Trash2, Save, X, Calendar, MapPin, DollarSign, Settings } from 'lucide-react'
+import { Plus, Trash2, Save, X, Calendar, MapPin, Settings, Pencil, Check } from 'lucide-react'
 import RichTextEditor from '@/components/forms/rich-text-editor'
 import { toast } from 'sonner'
 import type { Database } from '@/types/database'
@@ -23,20 +23,22 @@ interface DisciplineFee {
   maxEntries: number
 }
 
-interface MatchStageAssignment {
-  disciplineId: string
-  stageId: string | null
-}
-
-interface Match {
+interface DisciplineMatch {
   id: string
-  distance: string
-  matchName: string
+  stageId: string | null
   matchDate: string
   entryFee: number
-  isOptional: boolean
-  matchStages: MatchStageAssignment[]
 }
+
+interface StageFormData {
+  name: string
+  distance: string
+  sighters: number
+  rounds: number
+  maxScore: number
+}
+
+const emptyStageForm = (): StageFormData => ({ name: '', distance: '', sighters: 0, rounds: 0, maxScore: 0 })
 
 export default function AdminCompetitionsPage() {
   const [competitions, setCompetitions] = useState<Competition[]>([])
@@ -47,9 +49,19 @@ export default function AdminCompetitionsPage() {
   const [editingCompetitionId, setEditingCompetitionId] = useState<string | null>(null)
   const [selectedDisciplines, setSelectedDisciplines] = useState<string[]>([])
   const [disciplineFees, setDisciplineFees] = useState<Record<string, DisciplineFee>>({})
-  const [matches, setMatches] = useState<Match[]>([])
+  const [disciplineMatches, setDisciplineMatches] = useState<Record<string, DisciplineMatch[]>>({})
   const [disciplineStages, setDisciplineStages] = useState<Record<string, Stage[]>>({})
   const [loadingStages, setLoadingStages] = useState(false)
+
+  // Stage editing state
+  const [editingStageId, setEditingStageId] = useState<string | null>(null)
+  const [stageEditForm, setStageEditForm] = useState<StageFormData>(emptyStageForm())
+  const [savingStage, setSavingStage] = useState(false)
+
+  // Add distance state
+  const [addingDistanceDisciplineId, setAddingDistanceDisciplineId] = useState<string | null>(null)
+  const [newDistanceForm, setNewDistanceForm] = useState<StageFormData>(emptyStageForm())
+
   const supabase = createClient()
 
   const [formData, setFormData] = useState<Partial<CompetitionInsert>>({
@@ -118,7 +130,7 @@ export default function AdminCompetitionsPage() {
     setFormData({
       ...formData,
       name,
-      slug: formData.slug || generateSlug(name),
+      slug: generateSlug(name),
     })
   }
 
@@ -146,84 +158,186 @@ export default function AdminCompetitionsPage() {
 
   const handleDisciplineSelect = (disciplineId: string) => {
     if (selectedDisciplines.includes(disciplineId)) {
-      // Deselect: remove from disciplines, fees, and all match stage assignments
       setSelectedDisciplines(selectedDisciplines.filter((id) => id !== disciplineId))
       const newFees = { ...disciplineFees }
       delete newFees[disciplineId]
       setDisciplineFees(newFees)
-      setMatches(matches.map(m => ({
-        ...m,
-        matchStages: m.matchStages.filter(ms => ms.disciplineId !== disciplineId),
-      })))
+      const newMatches = { ...disciplineMatches }
+      delete newMatches[disciplineId]
+      setDisciplineMatches(newMatches)
     } else {
-      // Select: add discipline, fees, fetch stages, and add to all existing matches
-      const newDisciplines = [...selectedDisciplines, disciplineId]
-      setSelectedDisciplines(newDisciplines)
+      setSelectedDisciplines([...selectedDisciplines, disciplineId])
       setDisciplineFees({
         ...disciplineFees,
-        [disciplineId]: {
-          disciplineId,
-          standardFee: 0,
-          u19Fee: 0,
-          u25Fee: 0,
-          maxEntries: 0,
-        },
+        [disciplineId]: { disciplineId, standardFee: 0, u19Fee: 0, u25Fee: 0, maxEntries: 0 },
+      })
+      setDisciplineMatches({
+        ...disciplineMatches,
+        [disciplineId]: [],
       })
       fetchStagesForDisciplines([disciplineId])
-      // Add this discipline to all existing matches
-      setMatches(matches.map(m => ({
-        ...m,
-        matchStages: m.matchStages.some(ms => ms.disciplineId === disciplineId)
-          ? m.matchStages
-          : [...m.matchStages, { disciplineId, stageId: null }],
-      })))
     }
   }
 
   const updateDisciplineFee = (disciplineId: string, field: keyof DisciplineFee, value: number) => {
     setDisciplineFees({
       ...disciplineFees,
-      [disciplineId]: {
-        ...disciplineFees[disciplineId],
-        [field]: value,
-      },
+      [disciplineId]: { ...disciplineFees[disciplineId], [field]: value },
     })
   }
 
-  const addMatch = () => {
-    setMatches([
-      ...matches,
-      {
-        id: `temp-${Date.now()}`,
-        distance: '',
-        matchName: '',
-        matchDate: '',
-        entryFee: 0,
-        isOptional: false,
-        matchStages: selectedDisciplines.map(disciplineId => ({ disciplineId, stageId: null })),
-      },
-    ])
+  // --- Match helpers ---
+
+  const addMatchToDiscipline = (disciplineId: string) => {
+    const newMatch: DisciplineMatch = {
+      id: `temp-${Date.now()}`,
+      stageId: null,
+      matchDate: '',
+      entryFee: 0,
+    }
+    setDisciplineMatches({
+      ...disciplineMatches,
+      [disciplineId]: [...(disciplineMatches[disciplineId] || []), newMatch],
+    })
   }
 
-  const removeMatch = (id: string) => {
-    setMatches(matches.filter((m) => m.id !== id))
+  const removeMatchFromDiscipline = (disciplineId: string, matchId: string) => {
+    setDisciplineMatches({
+      ...disciplineMatches,
+      [disciplineId]: (disciplineMatches[disciplineId] || []).filter(m => m.id !== matchId),
+    })
   }
 
-  const updateMatch = (id: string, field: keyof Match, value: any) => {
-    setMatches(
-      matches.map((m) => (m.id === id ? { ...m, [field]: value } : m))
-    )
+  const updateDisciplineMatch = (disciplineId: string, matchId: string, field: keyof DisciplineMatch, value: any) => {
+    setDisciplineMatches({
+      ...disciplineMatches,
+      [disciplineId]: (disciplineMatches[disciplineId] || []).map(m =>
+        m.id === matchId ? { ...m, [field]: value } : m
+      ),
+    })
   }
 
-  const updateMatchStage = (matchId: string, disciplineId: string, stageId: string | null) => {
-    setMatches(matches.map(m => {
-      if (m.id !== matchId) return m
-      const existing = m.matchStages.find(ms => ms.disciplineId === disciplineId)
-      if (existing) {
-        return { ...m, matchStages: m.matchStages.map(ms => ms.disciplineId === disciplineId ? { ...ms, stageId } : ms) }
+  // --- Stage edit helpers ---
+
+  const startEditStage = (stage: Stage) => {
+    setEditingStageId(stage.id)
+    setStageEditForm({
+      name: stage.name,
+      distance: stage.distance || '',
+      sighters: stage.sighters ?? 0,
+      rounds: stage.rounds ?? 0,
+      maxScore: stage.max_score ?? 0,
+    })
+  }
+
+  const cancelStageEdit = () => {
+    setEditingStageId(null)
+    setStageEditForm(emptyStageForm())
+  }
+
+  const saveStageEdit = async () => {
+    if (!editingStageId) return
+    if (!stageEditForm.name.trim()) {
+      toast.error('Distance name is required')
+      return
+    }
+    setSavingStage(true)
+    const { error } = await supabase
+      .from('stages')
+      .update({
+        name: stageEditForm.name.trim(),
+        distance: stageEditForm.distance.trim() || null,
+        sighters: stageEditForm.sighters || null,
+        rounds: stageEditForm.rounds || null,
+        max_score: stageEditForm.maxScore || null,
+      })
+      .eq('id', editingStageId)
+    setSavingStage(false)
+
+    if (error) {
+      toast.error('Failed to update distance')
+      console.error(error)
+      return
+    }
+
+    // Update local state
+    setDisciplineStages(prev => {
+      const updated = { ...prev }
+      for (const disciplineId of Object.keys(updated)) {
+        updated[disciplineId] = updated[disciplineId].map(s =>
+          s.id === editingStageId
+            ? {
+                ...s,
+                name: stageEditForm.name.trim(),
+                distance: stageEditForm.distance.trim() || null,
+                sighters: stageEditForm.sighters || null,
+                rounds: stageEditForm.rounds || null,
+                max_score: stageEditForm.maxScore || null,
+              }
+            : s
+        )
       }
-      return { ...m, matchStages: [...m.matchStages, { disciplineId, stageId }] }
+      return updated
+    })
+
+    toast.success('Distance updated')
+    setEditingStageId(null)
+    setStageEditForm(emptyStageForm())
+  }
+
+  // --- Add distance helpers ---
+
+  const startAddDistance = (disciplineId: string) => {
+    setAddingDistanceDisciplineId(disciplineId)
+    setNewDistanceForm(emptyStageForm())
+    setEditingStageId(null) // close any open edit
+  }
+
+  const cancelAddDistance = () => {
+    setAddingDistanceDisciplineId(null)
+    setNewDistanceForm(emptyStageForm())
+  }
+
+  const saveNewDistance = async (disciplineId: string) => {
+    if (!newDistanceForm.name.trim()) {
+      toast.error('Distance name is required')
+      return
+    }
+    setSavingStage(true)
+    const existingStages = disciplineStages[disciplineId] || []
+    const nextStageNumber = existingStages.length > 0
+      ? Math.max(...existingStages.map(s => s.stage_number)) + 1
+      : 1
+
+    const { data, error } = await supabase
+      .from('stages')
+      .insert({
+        discipline_id: disciplineId,
+        name: newDistanceForm.name.trim(),
+        distance: newDistanceForm.distance.trim() || null,
+        sighters: newDistanceForm.sighters || null,
+        rounds: newDistanceForm.rounds || null,
+        max_score: newDistanceForm.maxScore || null,
+        stage_number: nextStageNumber,
+      })
+      .select()
+      .single()
+    setSavingStage(false)
+
+    if (error || !data) {
+      toast.error('Failed to add distance')
+      console.error(error)
+      return
+    }
+
+    setDisciplineStages(prev => ({
+      ...prev,
+      [disciplineId]: [...(prev[disciplineId] || []), data],
     }))
+
+    toast.success('Distance added')
+    setAddingDistanceDisciplineId(null)
+    setNewDistanceForm(emptyStageForm())
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -231,7 +345,6 @@ export default function AdminCompetitionsPage() {
     setSaving(true)
 
     try {
-      // Validate required fields
       if (!formData.name || !formData.start_date || !formData.end_date || !formData.location) {
         toast.error('Please fill in all required fields')
         setSaving(false)
@@ -244,12 +357,8 @@ export default function AdminCompetitionsPage() {
         return
       }
 
-      // Convert datetime-local strings to ISO format for database
       const convertToISO = (datetimeLocal: string | null | undefined): string | null => {
         if (!datetimeLocal) return null
-        // datetime-local format: "2024-01-15T10:00"
-        // Convert to ISO: "2024-01-15T10:00:00.000Z"
-        // We'll treat it as local time and convert to ISO
         const date = new Date(datetimeLocal)
         return isNaN(date.getTime()) ? null : date.toISOString()
       }
@@ -276,7 +385,6 @@ export default function AdminCompetitionsPage() {
       let competitionId: string
 
       if (editingCompetitionId) {
-        // Update existing competition
         const { data: competition, error: compError } = await supabase
           .from('competitions')
           .update(competitionData as CompetitionUpdate)
@@ -284,38 +392,22 @@ export default function AdminCompetitionsPage() {
           .select()
           .single()
 
-        if (compError) {
-          console.error('Error updating competition:', compError)
-          throw compError
-        }
+        if (compError) throw compError
         if (!competition) throw new Error('Failed to update competition')
         competitionId = competition.id
 
-        // Delete existing disciplines, matches, and stages
         const { error: deleteDiscError } = await supabase
           .from('competition_disciplines')
           .delete()
           .eq('competition_id', competitionId)
-
-        if (deleteDiscError) {
-          console.error('Error deleting competition disciplines:', deleteDiscError)
-          throw deleteDiscError
-        }
+        if (deleteDiscError) throw deleteDiscError
 
         const { error: deleteMatchError } = await supabase
           .from('competition_matches')
           .delete()
           .eq('competition_id', competitionId)
-
-        if (deleteMatchError) {
-          console.error('Error deleting competition matches:', deleteMatchError)
-          throw deleteMatchError
-        }
-
-        // Delete match_stages (cascades when matches are deleted, but be explicit)
-        // match_stages are deleted via ON DELETE CASCADE from competition_matches
+        if (deleteMatchError) throw deleteMatchError
       } else {
-        // Create new competition
         const { data: competition, error: compError } = await supabase
           .from('competitions')
           .insert(competitionData)
@@ -327,7 +419,7 @@ export default function AdminCompetitionsPage() {
         competitionId = competition.id
       }
 
-      // Create/update competition disciplines
+      // Insert competition disciplines
       const disciplineInserts: CompetitionDisciplineInsert[] = selectedDisciplines.map((disciplineId) => {
         const fees = disciplineFees[disciplineId]
         return {
@@ -344,106 +436,70 @@ export default function AdminCompetitionsPage() {
         const { error: discError } = await supabase
           .from('competition_disciplines')
           .insert(disciplineInserts)
-
         if (discError) throw discError
       }
 
-      // Create/update competition matches
-      if (matches.length > 0) {
-        const matchInserts: CompetitionMatchInsert[] = matches.map((match) => {
-          const isExistingMatch = match.id && !match.id.startsWith('temp-')
-          const insertData: CompetitionMatchInsert = {
+      // Insert matches per discipline
+      for (const disciplineId of selectedDisciplines) {
+        const matches = disciplineMatches[disciplineId] || []
+        if (matches.length === 0) continue
+
+        const matchInserts: CompetitionMatchInsert[] = matches.map((match, index) => {
+          const stage = (disciplineStages[disciplineId] || []).find(s => s.id === match.stageId)
+          return {
             competition_id: competitionId,
-            distance: match.distance || null,
-            match_name: match.matchName || match.distance || 'Match',
+            match_name: `Match ${index + 1}`,
+            distance: stage?.distance || stage?.name || null,
             match_date: match.matchDate || null,
             entry_fee: match.entryFee,
-            is_optional: match.isOptional || false,
+            is_optional: false,
           }
-          if (isExistingMatch) {
-            insertData.id = match.id
-          }
-          return insertData
         })
 
         const { data: savedMatches, error: matchError } = await supabase
           .from('competition_matches')
           .insert(matchInserts)
           .select()
+        if (matchError) throw matchError
 
-        if (matchError) {
-          console.error('Error inserting competition matches:', matchError)
-          throw matchError
-        }
-
-        // Build match_stages inserts using saved match IDs
+        // Insert match_stages
         const matchStageInserts: { match_id: string; stage_id: string; discipline_id: string }[] = []
         savedMatches?.forEach((savedMatch, index) => {
-          const original = matches[index]
-          original.matchStages.forEach(ms => {
-            if (ms.stageId) {
-              matchStageInserts.push({
-                match_id: savedMatch.id,
-                stage_id: ms.stageId,
-                discipline_id: ms.disciplineId,
-              })
-            }
-          })
+          const stageId = matches[index].stageId
+          if (stageId) {
+            matchStageInserts.push({
+              match_id: savedMatch.id,
+              stage_id: stageId,
+              discipline_id: disciplineId,
+            })
+          }
         })
 
         if (matchStageInserts.length > 0) {
           const { error: msError } = await supabase
             .from('match_stages')
             .insert(matchStageInserts)
-          if (msError) {
-            console.error('Error inserting match_stages:', msError)
-            throw msError
-          }
+          if (msError) throw msError
         }
       }
 
       toast.success(editingCompetitionId ? 'Event updated successfully!' : 'Event created successfully!')
       setShowForm(false)
       resetForm()
-      fetchCompetitions() // Refresh the competitions list
+      fetchCompetitions()
     } catch (error: any) {
       console.error('Error creating/updating event:', error)
-      console.error('Error type:', typeof error)
-      console.error('Error keys:', Object.keys(error || {}))
-      console.error('Error details:', {
-        message: error?.message,
-        details: error?.details,
-        hint: error?.hint,
-        code: error?.code,
-      })
-      
       let errorMessage = 'Error creating/updating event'
-      
-      if (error?.message) {
-        errorMessage = error.message
-      } else if (error?.details) {
-        errorMessage = error.details
-      } else if (error?.hint) {
-        errorMessage = error.hint
-      } else if (error?.code) {
+      if (error?.message) errorMessage = error.message
+      else if (error?.details) errorMessage = error.details
+      else if (error?.code) {
         switch (error.code) {
-          case '23505': // Unique constraint violation
-            errorMessage = 'A competition with this name or slug already exists'
-            break
-          case '23503': // Foreign key violation
-            errorMessage = 'Invalid discipline or competition data'
-            break
-          case '42501': // Insufficient privileges
-            errorMessage = 'Permission denied. Please ensure you have admin access.'
-            break
-          case 'PGRST116': // Not found
-            errorMessage = 'Competition not found'
-            break
-          default:
-            errorMessage = `Error: ${error.code}`
+          case '23505': errorMessage = 'A competition with this name or slug already exists'; break
+          case '23503': errorMessage = 'Invalid discipline or competition data'; break
+          case '42501': errorMessage = 'Permission denied. Please ensure you have admin access.'; break
+          default: errorMessage = `Error: ${error.code}`
         }
       }
-      
       toast.error(errorMessage)
     } finally {
       setSaving(false)
@@ -453,7 +509,6 @@ export default function AdminCompetitionsPage() {
   const loadCompetitionForEdit = async (competitionId: string) => {
     setLoading(true)
     try {
-      // Load competition
       const { data: competition, error: compError } = await supabase
         .from('competitions')
         .select('*')
@@ -465,36 +520,27 @@ export default function AdminCompetitionsPage() {
         return
       }
 
-      // Load competition disciplines
       const { data: compDisciplines } = await supabase
         .from('competition_disciplines')
         .select('*')
         .eq('competition_id', competitionId)
 
-      // Load competition matches with their stage assignments
       const { data: compMatches } = await supabase
         .from('competition_matches')
-        .select(`
-          *,
-          match_stages (
-            discipline_id,
-            stage_id
-          )
-        `)
+        .select(`*, match_stages (discipline_id, stage_id)`)
         .eq('competition_id', competitionId)
         .order('match_date', { ascending: true, nullsFirst: true })
 
-      // Populate form data
       setFormData({
         name: competition.name,
         slug: competition.slug,
-        start_date: competition.start_date.split('T')[0], // Extract date part
+        start_date: competition.start_date.split('T')[0],
         end_date: competition.end_date.split('T')[0],
         location: competition.location,
         venue_details: competition.venue_details || '',
         description: competition.description || '',
-        registration_opens: competition.registration_opens 
-          ? competition.registration_opens.replace('Z', '').slice(0, 16) // Format for datetime-local
+        registration_opens: competition.registration_opens
+          ? competition.registration_opens.replace('Z', '').slice(0, 16)
           : '',
         registration_closes: competition.registration_closes
           ? competition.registration_closes.replace('Z', '').slice(0, 16)
@@ -510,14 +556,12 @@ export default function AdminCompetitionsPage() {
         is_active: competition.is_active ?? true,
       })
 
-      // Populate disciplines
       const disciplineIds = compDisciplines?.map(cd => cd.discipline_id).filter((id): id is string => id !== null) || []
       setSelectedDisciplines(disciplineIds)
       if (disciplineIds.length > 0) {
         fetchStagesForDisciplines(disciplineIds)
       }
 
-      // Populate discipline fees
       const fees: Record<string, DisciplineFee> = {}
       compDisciplines?.forEach(cd => {
         if (cd.discipline_id) {
@@ -532,20 +576,22 @@ export default function AdminCompetitionsPage() {
       })
       setDisciplineFees(fees)
 
-      // Populate matches
-      const loadedMatches: Match[] = (compMatches as any[] || []).map(cm => ({
-        id: cm.id,
-        distance: cm.distance || '',
-        matchName: cm.match_name,
-        matchDate: cm.match_date ? cm.match_date.split('T')[0] : '',
-        entryFee: cm.entry_fee,
-        isOptional: cm.is_optional || false,
-        matchStages: (cm.match_stages || []).map((ms: any) => ({
-          disciplineId: ms.discipline_id,
-          stageId: ms.stage_id,
-        })),
-      }))
-      setMatches(loadedMatches)
+      // Group matches by discipline (from match_stages)
+      const dMatches: Record<string, DisciplineMatch[]> = {}
+      disciplineIds.forEach(id => { dMatches[id] = [] })
+      ;(compMatches as any[] || []).forEach(cm => {
+        const ms = cm.match_stages?.[0]
+        if (ms?.discipline_id) {
+          if (!dMatches[ms.discipline_id]) dMatches[ms.discipline_id] = []
+          dMatches[ms.discipline_id].push({
+            id: cm.id,
+            stageId: ms.stage_id || null,
+            matchDate: cm.match_date ? cm.match_date.split('T')[0] : '',
+            entryFee: cm.entry_fee,
+          })
+        }
+      })
+      setDisciplineMatches(dMatches)
       setEditingCompetitionId(competitionId)
       setShowForm(true)
     } catch (error: any) {
@@ -575,11 +621,15 @@ export default function AdminCompetitionsPage() {
       is_featured: false,
       is_active: true,
     })
-      setSelectedDisciplines([])
-      setDisciplineFees({})
-      setMatches([])
-      setDisciplineStages({})
-      setEditingCompetitionId(null)
+    setSelectedDisciplines([])
+    setDisciplineFees({})
+    setDisciplineMatches({})
+    setDisciplineStages({})
+    setEditingCompetitionId(null)
+    setEditingStageId(null)
+    setStageEditForm(emptyStageForm())
+    setAddingDistanceDisciplineId(null)
+    setNewDistanceForm(emptyStageForm())
   }
 
   if (loading) {
@@ -624,21 +674,11 @@ export default function AdminCompetitionsPage() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Event
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Dates
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Location
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dates</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -660,24 +700,14 @@ export default function AdminCompetitionsPage() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">
-                            {new Date(competition.start_date).toLocaleDateString()}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            to {new Date(competition.end_date).toLocaleDateString()}
-                          </div>
+                          <div className="text-sm text-gray-900">{new Date(competition.start_date).toLocaleDateString()}</div>
+                          <div className="text-sm text-gray-500">to {new Date(competition.end_date).toLocaleDateString()}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">{competition.location}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              competition.is_active
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-gray-100 text-gray-800'
-                            }`}
-                          >
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${competition.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                             {competition.is_active ? 'Active' : 'Inactive'}
                           </span>
                         </td>
@@ -688,14 +718,12 @@ export default function AdminCompetitionsPage() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-[#1e40af] hover:text-[#1e3a8a]"
-                              title="View Event"
                             >
                               View
                             </a>
                             <button
                               onClick={() => loadCompetitionForEdit(competition.id)}
                               className="text-[#1e40af] hover:text-[#1e3a8a]"
-                              title="Edit Event"
                             >
                               Edit
                             </button>
@@ -706,7 +734,6 @@ export default function AdminCompetitionsPage() {
                                     .from('competitions')
                                     .delete()
                                     .eq('id', competition.id)
-                                  
                                   if (error) {
                                     toast.error('Error deleting event')
                                     console.error(error)
@@ -717,7 +744,6 @@ export default function AdminCompetitionsPage() {
                                 }
                               }}
                               className="text-red-600 hover:text-red-800"
-                              title="Delete Event"
                             >
                               Delete
                             </button>
@@ -742,10 +768,7 @@ export default function AdminCompetitionsPage() {
                 {editingCompetitionId ? 'Edit Event' : 'Create Event'}
               </h2>
               <button
-                onClick={() => {
-                  setShowForm(false)
-                  resetForm()
-                }}
+                onClick={() => { setShowForm(false); resetForm() }}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X className="h-6 w-6" />
@@ -753,6 +776,7 @@ export default function AdminCompetitionsPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-8 max-h-[calc(100vh-200px)] overflow-y-auto">
+
               {/* Basic Information */}
               <section>
                 <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
@@ -761,9 +785,7 @@ export default function AdminCompetitionsPage() {
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Name *
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Name *</label>
                     <input
                       type="text"
                       value={formData.name}
@@ -772,24 +794,8 @@ export default function AdminCompetitionsPage() {
                       required
                     />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Slug
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.slug}
-                      onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                      placeholder="Auto-generated from name"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Start Date *
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Start Date *</label>
                     <input
                       type="date"
                       value={formData.start_date}
@@ -798,11 +804,8 @@ export default function AdminCompetitionsPage() {
                       required
                     />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      End Date *
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">End Date *</label>
                     <input
                       type="date"
                       value={formData.end_date}
@@ -811,11 +814,8 @@ export default function AdminCompetitionsPage() {
                       required
                     />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Location *
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Location *</label>
                     <input
                       type="text"
                       value={formData.location}
@@ -824,11 +824,8 @@ export default function AdminCompetitionsPage() {
                       required
                     />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Venue Details
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Venue Details</label>
                     <textarea
                       value={formData.venue_details || ''}
                       onChange={(e) => setFormData({ ...formData, venue_details: e.target.value })}
@@ -838,11 +835,8 @@ export default function AdminCompetitionsPage() {
                     />
                   </div>
                 </div>
-
                 <div className="mt-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                   <RichTextEditor
                     content={formData.description || ''}
                     onChange={(content) => setFormData({ ...formData, description: content })}
@@ -851,17 +845,16 @@ export default function AdminCompetitionsPage() {
                 </div>
               </section>
 
-              {/* Disciplines & Fees */}
+              {/* Disciplines, Fees & Matches */}
               <section>
                 <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
                   <MapPin className="h-5 w-5 mr-2 text-[#1e40af]" />
                   Disciplines & Fees
                 </h3>
 
+                {/* Discipline selector */}
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Disciplines *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Disciplines *</label>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-48 overflow-y-auto border border-gray-300 rounded-lg p-4">
                     {disciplines.map((discipline) => (
                       <label key={discipline.id} className="flex items-center cursor-pointer">
@@ -872,10 +865,7 @@ export default function AdminCompetitionsPage() {
                           className="mr-2"
                         />
                         <div className="flex items-center flex-1">
-                          <div
-                            className="w-3 h-3 rounded mr-2"
-                            style={{ backgroundColor: discipline.color || '#1e40af' }}
-                          />
+                          <div className="w-3 h-3 rounded mr-2" style={{ backgroundColor: discipline.color || '#1e40af' }} />
                           <span className="text-sm text-gray-700">{discipline.name}</span>
                         </div>
                       </label>
@@ -883,258 +873,351 @@ export default function AdminCompetitionsPage() {
                   </div>
                 </div>
 
+                {/* Per-discipline cards */}
                 {selectedDisciplines.length > 0 && (
-                  <div className="space-y-4">
-                    <h4 className="font-semibold text-gray-900">Fee Configuration</h4>
+                  <div className="space-y-6">
                     {selectedDisciplines.map((disciplineId) => {
                       const discipline = disciplines.find((d) => d.id === disciplineId)
-                      const fees = disciplineFees[disciplineId] || {
-                        disciplineId,
-                        standardFee: 0,
-                        u19Fee: 0,
-                        u25Fee: 0,
-                        maxEntries: 0,
-                      }
-                      const stages = disciplineStages[disciplineId]
+                      const fees = disciplineFees[disciplineId] || { disciplineId, standardFee: 0, u19Fee: 0, u25Fee: 0, maxEntries: 0 }
+                      const stages = disciplineStages[disciplineId] || []
+                      const dMatches = disciplineMatches[disciplineId] || []
 
                       return (
-                        <div key={disciplineId} className="border border-gray-200 rounded-lg p-4">
-                          <h5 className="font-semibold text-gray-900 mb-3 flex items-center">
-                            <div
-                              className="w-4 h-4 rounded mr-2"
-                              style={{ backgroundColor: discipline?.color || '#1e40af' }}
-                            />
-                            {discipline?.name}
-                          </h5>
-
-                          {/* Stages summary */}
-                          <div className="mb-3">
-                            {loadingStages && !stages ? (
-                              <p className="text-xs text-gray-400">Loading stages...</p>
-                            ) : stages && stages.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                <span className="text-xs text-gray-500 mr-1">Stages:</span>
-                                {stages.map(s => (
-                                  <span key={s.id} className="text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-0.5">
-                                    {s.name}{s.distance ? ` (${s.distance})` : ''}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : stages && stages.length === 0 ? (
-                              <p className="text-xs text-amber-600">⚠ No stages defined — go to Disciplines to add stages first</p>
-                            ) : null}
+                        <div key={disciplineId} className="border border-gray-200 rounded-lg overflow-hidden">
+                          {/* Card header */}
+                          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center">
+                            <div className="w-4 h-4 rounded mr-2" style={{ backgroundColor: discipline?.color || '#1e40af' }} />
+                            <h5 className="font-semibold text-gray-900">{discipline?.name}</h5>
                           </div>
 
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="p-4 space-y-6">
+
+                            {/* Fees */}
                             <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">
-                                Standard Fee (R)
-                              </label>
-                              <input
-                                type="number"
-                                value={fees.standardFee}
-                                onChange={(e) =>
-                                  updateDisciplineFee(disciplineId, 'standardFee', parseFloat(e.target.value) || 0)
-                                }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                                min="0"
-                                step="0.01"
-                              />
+                              <h6 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Fees</h6>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">Standard Fee (R)</label>
+                                  <input
+                                    type="number"
+                                    value={fees.standardFee}
+                                    onChange={(e) => updateDisciplineFee(disciplineId, 'standardFee', parseFloat(e.target.value) || 0)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                    min="0" step="0.01"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">U19 Fee (R)</label>
+                                  <input
+                                    type="number"
+                                    value={fees.u19Fee}
+                                    onChange={(e) => updateDisciplineFee(disciplineId, 'u19Fee', parseFloat(e.target.value) || 0)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                    min="0" step="0.01"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">U25 Fee (R)</label>
+                                  <input
+                                    type="number"
+                                    value={fees.u25Fee}
+                                    onChange={(e) => updateDisciplineFee(disciplineId, 'u25Fee', parseFloat(e.target.value) || 0)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                    min="0" step="0.01"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">Max Entries</label>
+                                  <input
+                                    type="number"
+                                    value={fees.maxEntries}
+                                    onChange={(e) => updateDisciplineFee(disciplineId, 'maxEntries', parseInt(e.target.value) || 0)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                    min="0"
+                                  />
+                                </div>
+                              </div>
                             </div>
+
+                            {/* Distances */}
                             <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">
-                                U19 Fee (R)
-                              </label>
-                              <input
-                                type="number"
-                                value={fees.u19Fee}
-                                onChange={(e) =>
-                                  updateDisciplineFee(disciplineId, 'u19Fee', parseFloat(e.target.value) || 0)
-                                }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                                min="0"
-                                step="0.01"
-                              />
+                              <div className="flex items-center justify-between mb-3">
+                                <h6 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Distances</h6>
+                                {addingDistanceDisciplineId !== disciplineId && (
+                                  <button
+                                    type="button"
+                                    onClick={() => startAddDistance(disciplineId)}
+                                    className="flex items-center text-xs text-[#1e40af] hover:text-[#1e3a8a] font-medium"
+                                  >
+                                    <Plus className="h-3.5 w-3.5 mr-1" />
+                                    Add Distance
+                                  </button>
+                                )}
+                              </div>
+
+                              {loadingStages && stages.length === 0 ? (
+                                <p className="text-xs text-gray-400">Loading distances...</p>
+                              ) : stages.length === 0 && addingDistanceDisciplineId !== disciplineId ? (
+                                <p className="text-xs text-amber-600">⚠ No distances defined. Add one to enable matches.</p>
+                              ) : (
+                                <div className="space-y-2">
+                                  {stages.map(stage => (
+                                    <div key={stage.id} className="border border-gray-100 rounded-lg">
+                                      {editingStageId === stage.id ? (
+                                        // Inline edit form
+                                        <div className="p-3 space-y-3">
+                                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                            <div>
+                                              <label className="block text-xs font-medium text-gray-600 mb-1">Name *</label>
+                                              <input
+                                                type="text"
+                                                value={stageEditForm.name}
+                                                onChange={(e) => setStageEditForm({ ...stageEditForm, name: e.target.value })}
+                                                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                                placeholder="e.g. 300m"
+                                              />
+                                            </div>
+                                            <div>
+                                              <label className="block text-xs font-medium text-gray-600 mb-1">Distance</label>
+                                              <input
+                                                type="text"
+                                                value={stageEditForm.distance}
+                                                onChange={(e) => setStageEditForm({ ...stageEditForm, distance: e.target.value })}
+                                                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                                placeholder="e.g. 300m"
+                                              />
+                                            </div>
+                                            <div>
+                                              <label className="block text-xs font-medium text-gray-600 mb-1">Sighters</label>
+                                              <input
+                                                type="number"
+                                                value={stageEditForm.sighters}
+                                                onChange={(e) => setStageEditForm({ ...stageEditForm, sighters: parseInt(e.target.value) || 0 })}
+                                                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                                min="0"
+                                              />
+                                            </div>
+                                            <div>
+                                              <label className="block text-xs font-medium text-gray-600 mb-1">Rounds</label>
+                                              <input
+                                                type="number"
+                                                value={stageEditForm.rounds}
+                                                onChange={(e) => setStageEditForm({ ...stageEditForm, rounds: parseInt(e.target.value) || 0 })}
+                                                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                                min="0"
+                                              />
+                                            </div>
+                                            <div>
+                                              <label className="block text-xs font-medium text-gray-600 mb-1">Max Score</label>
+                                              <input
+                                                type="number"
+                                                value={stageEditForm.maxScore}
+                                                onChange={(e) => setStageEditForm({ ...stageEditForm, maxScore: parseInt(e.target.value) || 0 })}
+                                                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                                min="0"
+                                              />
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <button
+                                              type="button"
+                                              onClick={saveStageEdit}
+                                              disabled={savingStage}
+                                              className="flex items-center px-3 py-1.5 text-xs bg-[#1e40af] text-white rounded hover:bg-[#1e3a8a] disabled:opacity-50"
+                                            >
+                                              <Check className="h-3.5 w-3.5 mr-1" />
+                                              {savingStage ? 'Saving...' : 'Save'}
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={cancelStageEdit}
+                                              className="px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded hover:bg-gray-50"
+                                            >
+                                              Cancel
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        // Display row
+                                        <div className="px-3 py-2 flex items-center justify-between">
+                                          <div className="flex items-center gap-3 text-sm">
+                                            <span className="font-medium text-gray-800">{stage.name}</span>
+                                            {stage.distance && <span className="text-gray-500">{stage.distance}</span>}
+                                            {(stage.sighters != null || stage.rounds != null) && (
+                                              <span className="text-xs text-gray-400">
+                                                {stage.sighters ?? 0} sighters · {stage.rounds ?? 0} rounds
+                                              </span>
+                                            )}
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => startEditStage(stage)}
+                                            className="text-gray-400 hover:text-[#1e40af] ml-2"
+                                            title="Edit distance"
+                                          >
+                                            <Pencil className="h-3.5 w-3.5" />
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Add distance inline form */}
+                              {addingDistanceDisciplineId === disciplineId && (
+                                <div className="mt-2 border border-dashed border-[#1e40af] rounded-lg p-3 space-y-3">
+                                  <p className="text-xs font-semibold text-[#1e40af]">New Distance</p>
+                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-600 mb-1">Name *</label>
+                                      <input
+                                        type="text"
+                                        value={newDistanceForm.name}
+                                        onChange={(e) => setNewDistanceForm({ ...newDistanceForm, name: e.target.value })}
+                                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                        placeholder="e.g. 300m"
+                                        autoFocus
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-600 mb-1">Distance</label>
+                                      <input
+                                        type="text"
+                                        value={newDistanceForm.distance}
+                                        onChange={(e) => setNewDistanceForm({ ...newDistanceForm, distance: e.target.value })}
+                                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                        placeholder="e.g. 300m"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-600 mb-1">Sighters</label>
+                                      <input
+                                        type="number"
+                                        value={newDistanceForm.sighters}
+                                        onChange={(e) => setNewDistanceForm({ ...newDistanceForm, sighters: parseInt(e.target.value) || 0 })}
+                                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                        min="0"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-600 mb-1">Rounds</label>
+                                      <input
+                                        type="number"
+                                        value={newDistanceForm.rounds}
+                                        onChange={(e) => setNewDistanceForm({ ...newDistanceForm, rounds: parseInt(e.target.value) || 0 })}
+                                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                        min="0"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-600 mb-1">Max Score</label>
+                                      <input
+                                        type="number"
+                                        value={newDistanceForm.maxScore}
+                                        onChange={(e) => setNewDistanceForm({ ...newDistanceForm, maxScore: parseInt(e.target.value) || 0 })}
+                                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                        min="0"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => saveNewDistance(disciplineId)}
+                                      disabled={savingStage}
+                                      className="flex items-center px-3 py-1.5 text-xs bg-[#1e40af] text-white rounded hover:bg-[#1e3a8a] disabled:opacity-50"
+                                    >
+                                      <Plus className="h-3.5 w-3.5 mr-1" />
+                                      {savingStage ? 'Saving...' : 'Add Distance'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={cancelAddDistance}
+                                      className="px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded hover:bg-gray-50"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
+
+                            {/* Matches */}
                             <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">
-                                U25 Fee (R)
-                              </label>
-                              <input
-                                type="number"
-                                value={fees.u25Fee}
-                                onChange={(e) =>
-                                  updateDisciplineFee(disciplineId, 'u25Fee', parseFloat(e.target.value) || 0)
-                                }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                                min="0"
-                                step="0.01"
-                              />
+                              <div className="flex items-center justify-between mb-3">
+                                <h6 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Matches</h6>
+                                <button
+                                  type="button"
+                                  onClick={() => addMatchToDiscipline(disciplineId)}
+                                  className="flex items-center text-xs text-[#1e40af] hover:text-[#1e3a8a] font-medium"
+                                >
+                                  <Plus className="h-3.5 w-3.5 mr-1" />
+                                  Add Match
+                                </button>
+                              </div>
+
+                              {dMatches.length === 0 ? (
+                                <p className="text-xs text-gray-400">No matches yet. Click "+ Add Match" to add one.</p>
+                              ) : (
+                                <div className="space-y-2">
+                                  {dMatches.map((match, index) => (
+                                    <div key={match.id} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2">
+                                      <span className="text-xs font-semibold text-gray-600 w-14 flex-shrink-0">
+                                        Match {index + 1}
+                                      </span>
+                                      <div className="flex-1 min-w-0">
+                                        <select
+                                          value={match.stageId || ''}
+                                          onChange={(e) => updateDisciplineMatch(disciplineId, match.id, 'stageId', e.target.value || null)}
+                                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent bg-white"
+                                        >
+                                          <option value="">— select distance —</option>
+                                          {stages.map(stage => (
+                                            <option key={stage.id} value={stage.id}>
+                                              {stage.name}{stage.distance ? ` (${stage.distance})` : ''}
+                                              {stage.sighters != null && stage.rounds != null ? ` · ${stage.sighters}+${stage.rounds}` : ''}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                      <div className="flex-shrink-0">
+                                        <input
+                                          type="date"
+                                          value={match.matchDate}
+                                          onChange={(e) => updateDisciplineMatch(disciplineId, match.id, 'matchDate', e.target.value)}
+                                          className="px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                        />
+                                      </div>
+                                      <div className="flex-shrink-0 w-28">
+                                        <div className="relative">
+                                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">R</span>
+                                          <input
+                                            type="number"
+                                            value={match.entryFee}
+                                            onChange={(e) => updateDisciplineMatch(disciplineId, match.id, 'entryFee', parseFloat(e.target.value) || 0)}
+                                            className="w-full pl-6 pr-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                            min="0" step="0.01" placeholder="0.00"
+                                          />
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => removeMatchFromDiscipline(disciplineId, match.id)}
+                                        className="text-red-400 hover:text-red-600 flex-shrink-0"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">
-                                Max Entries
-                              </label>
-                              <input
-                                type="number"
-                                value={fees.maxEntries}
-                                onChange={(e) =>
-                                  updateDisciplineFee(disciplineId, 'maxEntries', parseInt(e.target.value) || 0)
-                                }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                                min="0"
-                              />
-                            </div>
+
                           </div>
                         </div>
                       )
                     })}
-                  </div>
-                )}
-              </section>
-
-              {/* Matches */}
-              <section>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-bold text-gray-900 flex items-center">
-                    <DollarSign className="h-5 w-5 mr-2 text-[#1e40af]" />
-                    Matches
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={addMatch}
-                    className="flex items-center px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Match
-                  </button>
-                </div>
-
-                {matches.length === 0 ? (
-                  <p className="text-gray-500 text-sm">No matches added. Click "Add Match" to add one.</p>
-                ) : (
-                  <div className="space-y-4">
-                    {matches.map((match) => (
-                      <div key={match.id} className="border border-gray-200 rounded-lg p-4">
-                        <div className="flex items-start justify-between mb-4">
-                          <h4 className="font-semibold text-gray-900">Match {matches.indexOf(match) + 1}</h4>
-                          <button
-                            type="button"
-                            onClick={() => removeMatch(match.id)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Match Name *
-                            </label>
-                            <input
-                              type="text"
-                              value={match.matchName}
-                              onChange={(e) => updateMatch(match.id, 'matchName', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                              placeholder="e.g. Match 1"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Distance
-                            </label>
-                            <input
-                              type="text"
-                              value={match.distance}
-                              onChange={(e) => updateMatch(match.id, 'distance', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                              placeholder="e.g. 300m, Long Range"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Match Date
-                            </label>
-                            <input
-                              type="date"
-                              value={match.matchDate}
-                              onChange={(e) => updateMatch(match.id, 'matchDate', e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Entry Fee (R) *
-                            </label>
-                            <input
-                              type="number"
-                              value={match.entryFee}
-                              onChange={(e) => updateMatch(match.id, 'entryFee', parseFloat(e.target.value) || 0)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                              min="0"
-                              step="0.01"
-                              required
-                            />
-                          </div>
-                          <div className="flex items-center">
-                            <input
-                              type="checkbox"
-                              id={`optional-${match.id}`}
-                              checked={match.isOptional}
-                              onChange={(e) => updateMatch(match.id, 'isOptional', e.target.checked)}
-                              className="h-4 w-4 text-[#1e40af] focus:ring-[#1e40af] border-gray-300 rounded"
-                            />
-                            <label htmlFor={`optional-${match.id}`} className="ml-2 text-sm font-medium text-gray-700">
-                              Optional Match
-                            </label>
-                          </div>
-                        </div>
-
-                        {/* Stage assignments per discipline */}
-                        {selectedDisciplines.length > 0 && (
-                          <div className="mt-4 pt-4 border-t border-gray-100">
-                            <h5 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">
-                              Stage per Discipline
-                            </h5>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {selectedDisciplines.map(disciplineId => {
-                                const discipline = disciplines.find(d => d.id === disciplineId)
-                                const stages = disciplineStages[disciplineId]
-                                const assignment = match.matchStages.find(ms => ms.disciplineId === disciplineId)
-                                return (
-                                  <div key={disciplineId} className="flex items-center gap-2">
-                                    <div
-                                      className="w-3 h-3 rounded flex-shrink-0"
-                                      style={{ backgroundColor: discipline?.color || '#1e40af' }}
-                                    />
-                                    <span className="text-sm text-gray-700 w-24 flex-shrink-0">{discipline?.name}</span>
-                                    {!stages ? (
-                                      <span className="text-xs text-gray-400">Loading...</span>
-                                    ) : stages.length === 0 ? (
-                                      <span className="text-xs text-amber-600">No stages — add stages to discipline first</span>
-                                    ) : (
-                                      <select
-                                        value={assignment?.stageId || ''}
-                                        onChange={(e) => updateMatchStage(match.id, disciplineId, e.target.value || null)}
-                                        className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                                      >
-                                        <option value="">— select stage —</option>
-                                        {stages.map(stage => (
-                                          <option key={stage.id} value={stage.id}>
-                                            {stage.name}{stage.distance ? ` (${stage.distance})` : ''} — {stage.sighters ?? 0}+{stage.rounds ?? 0}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    )}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
                   </div>
                 )}
               </section>
@@ -1147,9 +1230,7 @@ export default function AdminCompetitionsPage() {
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Registration Opens
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Registration Opens</label>
                     <input
                       type="datetime-local"
                       value={formData.registration_opens || ''}
@@ -1157,11 +1238,8 @@ export default function AdminCompetitionsPage() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Registration Closes
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Registration Closes</label>
                     <input
                       type="datetime-local"
                       value={formData.registration_closes || ''}
@@ -1169,11 +1247,8 @@ export default function AdminCompetitionsPage() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Late Registration Date
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Late Registration Date</label>
                     <input
                       type="datetime-local"
                       value={formData.late_registration_date || ''}
@@ -1181,11 +1256,8 @@ export default function AdminCompetitionsPage() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Capacity
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Capacity</label>
                     <input
                       type="number"
                       value={formData.capacity || ''}
@@ -1194,55 +1266,36 @@ export default function AdminCompetitionsPage() {
                       min="0"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Compulsory Range Fee (R)
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Compulsory Range Fee (R)</label>
                     <input
                       type="number"
                       value={formData.compulsory_range_fee || ''}
-                      onChange={(e) =>
-                        setFormData({ ...formData, compulsory_range_fee: parseFloat(e.target.value) || null })
-                      }
+                      onChange={(e) => setFormData({ ...formData, compulsory_range_fee: parseFloat(e.target.value) || null })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                      min="0"
-                      step="0.01"
+                      min="0" step="0.01"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Late Entry Fee (R)
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Late Entry Fee (R)</label>
                     <input
                       type="number"
                       value={formData.late_entry_fee || ''}
-                      onChange={(e) =>
-                        setFormData({ ...formData, late_entry_fee: parseFloat(e.target.value) || null })
-                      }
+                      onChange={(e) => setFormData({ ...formData, late_entry_fee: parseFloat(e.target.value) || null })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                      min="0"
-                      step="0.01"
+                      min="0" step="0.01"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Import/Export Permit Fee (R)
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Import/Export Permit Fee (R)</label>
                     <input
                       type="number"
                       value={formData.import_export_permit_fee || ''}
-                      onChange={(e) =>
-                        setFormData({ ...formData, import_export_permit_fee: parseFloat(e.target.value) || null })
-                      }
+                      onChange={(e) => setFormData({ ...formData, import_export_permit_fee: parseFloat(e.target.value) || null })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                      min="0"
-                      step="0.01"
+                      min="0" step="0.01"
                     />
                   </div>
-
                   <div className="flex items-center">
                     <input
                       type="checkbox"
@@ -1251,21 +1304,16 @@ export default function AdminCompetitionsPage() {
                       onChange={(e) => setFormData({ ...formData, is_featured: e.target.checked })}
                       className="h-4 w-4 text-[#1e40af] focus:ring-[#1e40af] border-gray-300 rounded"
                     />
-                    <label htmlFor="is_featured" className="ml-2 text-sm font-medium text-gray-700">
-                      Featured Event
-                    </label>
+                    <label htmlFor="is_featured" className="ml-2 text-sm font-medium text-gray-700">Featured Event</label>
                   </div>
                 </div>
               </section>
 
-              {/* Submit Buttons */}
+              {/* Submit */}
               <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowForm(false)
-                    resetForm()
-                  }}
+                  onClick={() => { setShowForm(false); resetForm() }}
                   className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   Cancel
@@ -1278,7 +1326,7 @@ export default function AdminCompetitionsPage() {
                   {saving ? (
                     <>
                       <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                      Creating...
+                      Saving...
                     </>
                   ) : (
                     <>
