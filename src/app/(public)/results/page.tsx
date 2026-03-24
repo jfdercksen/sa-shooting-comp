@@ -55,8 +55,6 @@ interface AnnualResult {
   sabuNumber: string
   club: string
   province: string
-  disciplineId: string
-  disciplineName: string
   competitionScores: Record<string, number>
   competitionX: Record<string, number>
   competitionV: Record<string, number>
@@ -412,7 +410,7 @@ export default function ResultsPage() {
       const regMap: Record<string, any> = {}
       regs.forEach((r: any) => { regMap[r.id] = r })
 
-      // 4. Aggregate per user+discipline
+      // 4. Aggregate per user (one row per shooter, totals across all disciplines)
       const aggregated: Record<string, AnnualResult> = {}
 
       scoresData.forEach((score: any) => {
@@ -420,7 +418,7 @@ export default function ResultsPage() {
         if (!reg) return
         if (score.is_dnf || score.is_dq) return
 
-        const key = `${reg.user_id}-${reg.discipline_id}`
+        const key = reg.user_id
         if (!aggregated[key]) {
           const shooter = reg.profiles
           aggregated[key] = {
@@ -429,8 +427,6 @@ export default function ResultsPage() {
             sabuNumber: shooter?.sabu_number || '',
             club: shooter?.club || '',
             province: shooter?.province || '',
-            disciplineId: reg.discipline_id || '',
-            disciplineName: reg.disciplines?.name || '',
             competitionScores: {},
             competitionX: {},
             competitionV: {},
@@ -1038,9 +1034,6 @@ export default function ResultsPage() {
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SABU #</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Club</th>
-                          {!selectedDiscipline && (
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discipline</th>
-                          )}
                           {yearCompetitions.map(comp => (
                             <th key={comp.id} className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                               {comp.name}
@@ -1057,7 +1050,7 @@ export default function ResultsPage() {
                           const position = index + 1
                           const isCurrentUser = user && entry.userId === user.id
                           return (
-                            <tr key={`${entry.userId}-${entry.disciplineId}`} className={isCurrentUser ? 'bg-blue-50 border-l-4 border-[#1e40af]' : ''}>
+                            <tr key={entry.userId} className={isCurrentUser ? 'bg-blue-50 border-l-4 border-[#1e40af]' : ''}>
                               <td className="px-4 py-4 whitespace-nowrap">
                                 <div className="flex items-center gap-2">
                                   {getMedalIcon(position)}
@@ -1072,9 +1065,6 @@ export default function ResultsPage() {
                               </td>
                               <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{entry.sabuNumber || '-'}</td>
                               <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{entry.club || '-'}</td>
-                              {!selectedDiscipline && (
-                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{entry.disciplineName}</td>
-                              )}
                               {yearCompetitions.map(comp => (
                                 <td key={comp.id} className="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-700">
                                   {entry.competitionScores[comp.id] != null ? entry.competitionScores[comp.id] : '-'}
