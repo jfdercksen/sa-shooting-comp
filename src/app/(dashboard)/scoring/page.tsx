@@ -269,6 +269,9 @@ export default function ScoringPage() {
             match_date,
             match_stages (
               discipline_id,
+              rounds,
+              sighters,
+              max_score,
               stages (*)
             )
           `)
@@ -287,6 +290,10 @@ export default function ScoringPage() {
             if (ms.stages) {
               scoringStagesList.push({
                 ...ms.stages,
+                // Apply per-event overrides — null means use stage default
+                rounds: ms.rounds ?? ms.stages.rounds,
+                sighters: ms.sighters ?? ms.stages.sighters,
+                max_score: ms.max_score ?? ms.stages.max_score,
                 matchId: match.id,
                 matchName: match.match_name,
                 matchDistance: match.distance,

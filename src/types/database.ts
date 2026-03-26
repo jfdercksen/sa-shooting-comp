@@ -150,6 +150,9 @@ export type Database = {
           discipline_id: string
           id: string
           match_id: string
+          max_score: number | null
+          rounds: number | null
+          sighters: number | null
           stage_id: string
         }
         Insert: {
@@ -157,6 +160,9 @@ export type Database = {
           discipline_id: string
           id?: string
           match_id: string
+          max_score?: number | null
+          rounds?: number | null
+          sighters?: number | null
           stage_id: string
         }
         Update: {
@@ -164,6 +170,9 @@ export type Database = {
           discipline_id?: string
           id?: string
           match_id?: string
+          max_score?: number | null
+          rounds?: number | null
+          sighters?: number | null
           stage_id?: string
         }
         Relationships: [

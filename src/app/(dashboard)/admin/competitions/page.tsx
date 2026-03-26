@@ -28,6 +28,9 @@ interface DisciplineMatch {
   stageId: string | null
   matchDate: string
   entryFee: number
+  roundsOverride: number | null    // null = use stage default
+  sightersOverride: number | null  // null = use stage default
+  maxScoreOverride: number | null  // null = use stage default
 }
 
 interface StageFormData {
@@ -206,6 +209,9 @@ export default function AdminCompetitionsPage() {
       stageId: null,
       matchDate: '',
       entryFee: 0,
+      roundsOverride: null,
+      sightersOverride: null,
+      maxScoreOverride: null,
     }
     setDisciplineMatches({
       ...disciplineMatches,
@@ -475,15 +481,19 @@ export default function AdminCompetitionsPage() {
           .select()
         if (matchError) throw matchError
 
-        // Insert match_stages
-        const matchStageInserts: { match_id: string; stage_id: string; discipline_id: string }[] = []
+        // Insert match_stages (with optional per-event shot config overrides)
+        const matchStageInserts: { match_id: string; stage_id: string; discipline_id: string; rounds: number | null; sighters: number | null; max_score: number | null }[] = []
         savedMatches?.forEach((savedMatch, index) => {
-          const stageId = matches[index].stageId
+          const match = matches[index]
+          const stageId = match.stageId
           if (stageId) {
             matchStageInserts.push({
               match_id: savedMatch.id,
               stage_id: stageId,
               discipline_id: disciplineId,
+              rounds: match.roundsOverride || null,
+              sighters: match.sightersOverride || null,
+              max_score: match.maxScoreOverride || null,
             })
           }
         })
@@ -540,7 +550,7 @@ export default function AdminCompetitionsPage() {
 
       const { data: compMatches } = await supabase
         .from('competition_matches')
-        .select(`*, match_stages (discipline_id, stage_id)`)
+        .select(`*, match_stages (discipline_id, stage_id, rounds, sighters, max_score)`)
         .eq('competition_id', competitionId)
         .order('match_date', { ascending: true, nullsFirst: true })
 
@@ -602,6 +612,9 @@ export default function AdminCompetitionsPage() {
             stageId: ms.stage_id || null,
             matchDate: cm.match_date ? cm.match_date.split('T')[0] : '',
             entryFee: cm.entry_fee,
+            roundsOverride: ms.rounds ?? null,
+            sightersOverride: ms.sighters ?? null,
+            maxScoreOverride: ms.max_score ?? null,
           })
         }
       })
@@ -1189,55 +1202,96 @@ export default function AdminCompetitionsPage() {
                                 <p className="text-xs text-gray-400">No matches yet. Click "+ Add Match" to add one.</p>
                               ) : (
                                 <div className="space-y-2">
-                                  {dMatches.map((match, index) => (
-                                    <div key={match.id} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2">
-                                      <span className="text-xs font-semibold text-gray-600 w-14 flex-shrink-0">
-                                        Match {index + 1}
-                                      </span>
-                                      <div className="flex-1 min-w-0">
-                                        <select
-                                          value={match.stageId || ''}
-                                          onChange={(e) => updateDisciplineMatch(disciplineId, match.id, 'stageId', e.target.value || null)}
-                                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent bg-white"
-                                        >
-                                          <option value="">— select distance —</option>
-                                          {stages.map(stage => (
-                                            <option key={stage.id} value={stage.id}>
-                                              {stage.name}{stage.distance ? ` (${stage.distance})` : ''}
-                                              {stage.sighters != null && stage.rounds != null ? ` · ${stage.sighters}+${stage.rounds}` : ''}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </div>
-                                      <div className="flex-shrink-0">
-                                        <input
-                                          type="date"
-                                          value={match.matchDate}
-                                          onChange={(e) => updateDisciplineMatch(disciplineId, match.id, 'matchDate', e.target.value)}
-                                          className="px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                                        />
-                                      </div>
-                                      <div className="flex-shrink-0 w-28">
-                                        <div className="relative">
-                                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">R</span>
+                                  {dMatches.map((match, index) => {
+                                    const selectedStage = stages.find(s => s.id === match.stageId)
+                                    return (
+                                    <div key={match.id} className="bg-gray-50 rounded-lg px-3 py-2 space-y-2">
+                                      {/* Row 1: stage, date, fee, delete */}
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-xs font-semibold text-gray-600 w-14 flex-shrink-0">
+                                          Match {index + 1}
+                                        </span>
+                                        <div className="flex-1 min-w-0">
+                                          <select
+                                            value={match.stageId || ''}
+                                            onChange={(e) => updateDisciplineMatch(disciplineId, match.id, 'stageId', e.target.value || null)}
+                                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent bg-white"
+                                          >
+                                            <option value="">— select distance —</option>
+                                            {stages.map(stage => (
+                                              <option key={stage.id} value={stage.id}>
+                                                {stage.name}{stage.distance ? ` (${stage.distance})` : ''}
+                                                {stage.sighters != null && stage.rounds != null ? ` · ${stage.sighters}+${stage.rounds}` : ''}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                        <div className="flex-shrink-0">
                                           <input
-                                            type="number"
-                                            value={match.entryFee}
-                                            onChange={(e) => updateDisciplineMatch(disciplineId, match.id, 'entryFee', parseFloat(e.target.value) || 0)}
-                                            className="w-full pl-6 pr-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
-                                            min="0" step="0.01" placeholder="0.00"
+                                            type="date"
+                                            value={match.matchDate}
+                                            onChange={(e) => updateDisciplineMatch(disciplineId, match.id, 'matchDate', e.target.value)}
+                                            className="px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
                                           />
                                         </div>
+                                        <div className="flex-shrink-0 w-28">
+                                          <div className="relative">
+                                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">R</span>
+                                            <input
+                                              type="number"
+                                              value={match.entryFee}
+                                              onChange={(e) => updateDisciplineMatch(disciplineId, match.id, 'entryFee', parseFloat(e.target.value) || 0)}
+                                              className="w-full pl-6 pr-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                              min="0" step="0.01" placeholder="0.00"
+                                            />
+                                          </div>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => removeMatchFromDiscipline(disciplineId, match.id)}
+                                          className="text-red-400 hover:text-red-600 flex-shrink-0"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
                                       </div>
-                                      <button
-                                        type="button"
-                                        onClick={() => removeMatchFromDiscipline(disciplineId, match.id)}
-                                        className="text-red-400 hover:text-red-600 flex-shrink-0"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </button>
+                                      {/* Row 2: per-event shot overrides */}
+                                      <div className="flex items-center gap-3 pl-[4.25rem]">
+                                        <span className="text-xs text-gray-400 flex-shrink-0">Override shots:</span>
+                                        <div className="flex items-center gap-1.5">
+                                          <label className="text-xs text-gray-500 flex-shrink-0">Sighters</label>
+                                          <input
+                                            type="number"
+                                            value={match.sightersOverride ?? ''}
+                                            onChange={(e) => updateDisciplineMatch(disciplineId, match.id, 'sightersOverride', e.target.value === '' ? null : parseInt(e.target.value))}
+                                            className="w-16 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-[#1e40af] focus:border-transparent"
+                                            min="0" placeholder={selectedStage?.sighters != null ? String(selectedStage.sighters) : '—'}
+                                          />
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                          <label className="text-xs text-gray-500 flex-shrink-0">Rounds</label>
+                                          <input
+                                            type="number"
+                                            value={match.roundsOverride ?? ''}
+                                            onChange={(e) => updateDisciplineMatch(disciplineId, match.id, 'roundsOverride', e.target.value === '' ? null : parseInt(e.target.value))}
+                                            className="w-16 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-[#1e40af] focus:border-transparent"
+                                            min="1" placeholder={selectedStage?.rounds != null ? String(selectedStage.rounds) : '—'}
+                                          />
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                          <label className="text-xs text-gray-500 flex-shrink-0">Max/shot</label>
+                                          <input
+                                            type="number"
+                                            value={match.maxScoreOverride ?? ''}
+                                            onChange={(e) => updateDisciplineMatch(disciplineId, match.id, 'maxScoreOverride', e.target.value === '' ? null : parseInt(e.target.value))}
+                                            className="w-16 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-[#1e40af] focus:border-transparent"
+                                            min="1" placeholder={selectedStage?.max_score != null ? String(selectedStage.max_score) : '—'}
+                                          />
+                                        </div>
+                                        <span className="text-xs text-gray-400 italic">blank = use stage default</span>
+                                      </div>
                                     </div>
-                                  ))}
+                                    )
+                                  })}
                                 </div>
                               )}
                             </div>
