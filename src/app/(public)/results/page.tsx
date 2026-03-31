@@ -76,7 +76,8 @@ export default function ResultsPage() {
   const [selectedDiscipline, setSelectedDiscipline] = useState<string>('')
   const [selectedAgeClass, setSelectedAgeClass] = useState<string>('')
   const [selectedMatch, setSelectedMatch] = useState<string>('')
-  const [viewMode, setViewMode] = useState<'match' | 'team' | 'total' | 'annual'>('match')
+  const [viewMode, setViewMode] = useState<'match' | 'team' | 'total' | 'annual' | 'aggregate'>('match')
+  const [aggregateResults, setAggregateResults] = useState<any[]>([])
   const [championships, setChampionships] = useState<any[]>([])
   const [selectedChampionship, setSelectedChampionship] = useState<string>('')
   const [annualResults, setAnnualResults] = useState<AnnualResult[]>([])
@@ -116,6 +117,8 @@ export default function ResultsPage() {
     } else if (selectedCompetition) {
       if (viewMode === 'team') {
         fetchTeamResults()
+      } else if (viewMode === 'aggregate') {
+        fetchAggregateResults()
       } else {
         fetchResults()
       }
@@ -289,6 +292,29 @@ export default function ResultsPage() {
     if (!selectedCompetition) return
 
     try {
+      // Load team_top_n per discipline for this competition
+      const { data: compDiscs } = await (supabase as any)
+        .from('competition_disciplines')
+        .select('discipline_id, team_top_n')
+        .eq('competition_id', selectedCompetition)
+      const topNByDiscipline: Record<string, number | null> = {}
+      ;(compDiscs || []).forEach((cd: any) => {
+        topNByDiscipline[cd.discipline_id] = cd.team_top_n ?? null
+      })
+
+      // Load tiebreak method per discipline
+      const discIds = (compDiscs || []).map((cd: any) => cd.discipline_id).filter(Boolean)
+      const tiebreakByDiscipline: Record<string, string> = {}
+      if (discIds.length > 0) {
+        const { data: discData } = await (supabase as any)
+          .from('disciplines')
+          .select('id, tiebreak_method')
+          .in('id', discIds)
+        ;(discData || []).forEach((d: any) => {
+          tiebreakByDiscipline[d.id] = d.tiebreak_method || 'score_x_v'
+        })
+      }
+
       let scoresQuery = supabase
         .from('scores')
         .select(`
@@ -344,10 +370,14 @@ export default function ResultsPage() {
       })
 
       const teamResultsList = Object.values(teamAggregates).map((team: any) => {
+        const tb = tiebreakByDiscipline[team.discipline_id] || 'score_x_v'
         const sorted = [...team.member_scores].sort((a: any, b: any) =>
-          b.total_score - a.total_score || b.total_x - a.total_x || b.total_v - a.total_v
+          tb === 'score_v'
+            ? b.total_score - a.total_score || b.total_v - a.total_v
+            : b.total_score - a.total_score || b.total_x - a.total_x || b.total_v - a.total_v
         )
-        const scoresToCount = team.member_count === 4 ? 3 : team.member_count
+        const topN = topNByDiscipline[team.discipline_id]
+        const scoresToCount = topN != null ? Math.min(topN, team.member_count) : team.member_count
         const counted = sorted.slice(0, scoresToCount)
         return {
           team_id: team.team_id,
@@ -363,14 +393,104 @@ export default function ResultsPage() {
         }
       })
 
-      teamResultsList.sort((a: any, b: any) =>
-        b.total_score - a.total_score || b.total_x_count - a.total_x_count || b.total_v_count - a.total_v_count
-      )
+      teamResultsList.sort((a: any, b: any) => {
+        const tb = tiebreakByDiscipline[a.discipline_id] || 'score_x_v'
+        if (tb === 'score_v') return b.total_score - a.total_score || b.total_v_count - a.total_v_count
+        return b.total_score - a.total_score || b.total_x_count - a.total_x_count || b.total_v_count - a.total_v_count
+      })
       setTeamResults(teamResultsList)
     } catch (error) {
       console.error('Error fetching team results:', error)
       toast.error('Failed to load team results')
       setTeamResults([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchAggregateResults = async () => {
+    if (!selectedCompetition) return
+    setLoading(true)
+    try {
+      // 1. Load all aggregate matches for this competition (optionally filtered by discipline)
+      let aggQuery = (supabase as any)
+        .from('competition_matches')
+        .select(`id, match_name, match_stages(discipline_id, disciplines(name))`)
+        .eq('competition_id', selectedCompetition)
+        .eq('match_type', 'aggregate')
+
+      const { data: aggMatches } = await aggQuery
+      if (!aggMatches || aggMatches.length === 0) { setAggregateResults([]); setLoading(false); return }
+
+      // Flatten discipline info
+      const aggList = (aggMatches as any[]).map((m: any) => {
+        const ms = m.match_stages?.[0]
+        return { id: m.id, match_name: m.match_name, discipline_id: ms?.discipline_id || '', discipline_name: ms?.disciplines?.name || '—' }
+      }).filter(m => !selectedDiscipline || m.discipline_id === selectedDiscipline)
+
+      if (aggList.length === 0) { setAggregateResults([]); setLoading(false); return }
+
+      // 2. Load source match IDs for all aggregate matches
+      const { data: sourcesData } = await (supabase as any)
+        .from('aggregate_match_sources')
+        .select('aggregate_match_id, source_match_id')
+        .in('aggregate_match_id', aggList.map((a: any) => a.id))
+
+      const sourcesByAgg: Record<string, string[]> = {}
+      aggList.forEach((a: any) => { sourcesByAgg[a.id] = [] })
+      ;(sourcesData || []).forEach((s: any) => {
+        if (sourcesByAgg[s.aggregate_match_id]) sourcesByAgg[s.aggregate_match_id].push(s.source_match_id)
+      })
+
+      // 3. Fetch all verified scores for source matches
+      const allSourceIds = Object.values(sourcesByAgg).flat()
+      if (allSourceIds.length === 0) { setAggregateResults([]); setLoading(false); return }
+
+      const { data: scoresData } = await supabase
+        .from('scores')
+        .select(`score, v_count, x_count, is_dnf, is_dq, match_id, registrations!inner(user_id, competition_id, discipline_id, profiles(full_name, sabu_number, club, province))`)
+        .in('match_id', allSourceIds)
+        .not('verified_at', 'is', null) as any
+
+      // 4. For each aggregate match, sum scores per shooter
+      const computed = aggList.map((agg: any) => {
+        const sourceIds = new Set(sourcesByAgg[agg.id])
+        const shooterMap: Record<string, any> = {}
+
+        ;(scoresData || []).forEach((score: any) => {
+          const reg = score.registrations
+          if (!sourceIds.has(score.match_id)) return
+          if (reg?.competition_id !== selectedCompetition) return
+          if (selectedDiscipline && reg?.discipline_id !== selectedDiscipline) return
+
+          const uid = reg.user_id
+          if (!shooterMap[uid]) {
+            shooterMap[uid] = {
+              userId: uid,
+              name: reg.profiles?.full_name || 'Unknown',
+              sabuNumber: reg.profiles?.sabu_number || '',
+              club: reg.profiles?.club || '',
+              province: reg.profiles?.province || '',
+              totalScore: 0, totalX: 0, totalV: 0, hasDNF: false,
+            }
+          }
+          if (score.is_dnf || score.is_dq) { shooterMap[uid].hasDNF = true; return }
+          shooterMap[uid].totalScore += score.score || 0
+          shooterMap[uid].totalX += score.x_count || 0
+          shooterMap[uid].totalV += score.v_count || 0
+        })
+
+        const sorted = Object.values(shooterMap).sort((a: any, b: any) =>
+          b.totalScore - a.totalScore || b.totalV - a.totalV
+        )
+        return { ...agg, sourceCount: sourceIds.size, standings: sorted }
+      })
+
+      setAggregateResults(computed)
+    } catch (error) {
+      console.error('Error fetching aggregate results:', error)
+      toast.error('Failed to load aggregate results')
+      setAggregateResults([])
     } finally {
       setLoading(false)
     }
@@ -506,7 +626,8 @@ export default function ResultsPage() {
           disciplines (id, name),
           teams (id, name)
         ),
-        stages (id, stage_number, name)
+        stages (id, stage_number, name),
+        competition_matches!scores_match_id_fkey (id, is_warmup)
       `)
       .eq('registrations.competition_id', selectedCompetition)
 
@@ -548,6 +669,9 @@ export default function ResultsPage() {
 
       if (!score.verified_at) aggregated[regId].hasUnverified = true
 
+      // Exclude warm-up match scores from standings
+      if (score.competition_matches?.is_warmup) return
+
       const stageId = score.stage_id
       if (score.is_dnf) {
         aggregated[regId].hasDNF = true
@@ -576,9 +700,23 @@ export default function ResultsPage() {
       )
     }
 
+    // Determine tiebreak method for the active discipline (if filtered)
+    let tiebreakMethod = 'score_x_v'
+    if (selectedDiscipline) {
+      const { data: discInfo } = await (supabase as any)
+        .from('disciplines')
+        .select('tiebreak_method')
+        .eq('id', selectedDiscipline)
+        .single()
+      tiebreakMethod = (discInfo as any)?.tiebreak_method || 'score_x_v'
+    }
+
     resultsList.sort((a, b) => {
       if (a.hasDNF || a.hasDQ) return 1
       if (b.hasDNF || b.hasDQ) return -1
+      if (tiebreakMethod === 'score_v') {
+        return b.totalScore - a.totalScore || b.totalV - a.totalV
+      }
       return b.totalScore - a.totalScore || b.totalX - a.totalX || b.totalV - a.totalV
     })
 
@@ -587,7 +725,7 @@ export default function ResultsPage() {
 
     const disciplineIds = [...new Set(resultsList.map(r => r.disciplineId).filter(Boolean))]
     if (disciplineIds.length > 0) {
-      const { data: discs } = await supabase.from('disciplines').select('id, name').in('id', disciplineIds)
+      const { data: discs } = await (supabase as any).from('disciplines').select('id, name, tiebreak_method').in('id', disciplineIds)
       if (discs) setDisciplines(discs)
     }
 
@@ -878,6 +1016,7 @@ export default function ResultsPage() {
                   { id: 'match', label: 'Match Results' },
                   { id: 'total', label: 'Event Total' },
                   { id: 'team', label: 'Team Results' },
+                  { id: 'aggregate', label: 'Aggregates' },
                   { id: 'annual', label: 'Annual Standings' },
                 ].map((tab) => (
                   <button
@@ -1236,6 +1375,62 @@ export default function ResultsPage() {
                       </tbody>
                     </table>
                   </div>
+                </div>
+              )
+            ) : viewMode === 'aggregate' ? (
+              aggregateResults.length === 0 ? (
+                <div className="bg-white rounded-lg shadow-md p-12 text-center">
+                  <Trophy className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-900 font-semibold text-lg mb-2">No Aggregate Results</p>
+                  <p className="text-gray-500 text-sm">
+                    No aggregate matches are defined for this event.
+                    Go to <strong>Admin → Aggregates</strong> to configure them.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {aggregateResults.map((agg: any) => (
+                    <div key={agg.id} className="bg-white rounded-lg shadow-md overflow-hidden">
+                      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-bold text-gray-900">{agg.match_name}</h3>
+                          <p className="text-sm text-gray-500">{agg.discipline_name} · {agg.sourceCount} source match{agg.sourceCount !== 1 ? 'es' : ''}</p>
+                        </div>
+                      </div>
+                      {agg.standings.length === 0 ? (
+                        <p className="px-6 py-4 text-sm text-gray-400">No verified scores from source matches yet.</p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">Pos</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SABU #</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Club</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Province</th>
+                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">V</th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {agg.standings.map((s: any, i: number) => (
+                                <tr key={s.userId} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                  <td className="px-4 py-3 text-sm text-gray-500">{i + 1}</td>
+                                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{s.name}</td>
+                                  <td className="px-4 py-3 text-sm text-gray-500">{s.sabuNumber || '—'}</td>
+                                  <td className="px-4 py-3 text-sm text-gray-500">{s.club || '—'}</td>
+                                  <td className="px-4 py-3 text-sm text-gray-500">{s.province || '—'}</td>
+                                  <td className="px-4 py-3 text-right text-sm font-bold text-gray-900">{s.totalScore}</td>
+                                  <td className="px-4 py-3 text-right text-sm text-gray-900">{s.totalV}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )
             ) : viewMode === 'match' && !selectedDiscipline ? (

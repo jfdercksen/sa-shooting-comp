@@ -27,7 +27,8 @@ export default function AdminDisciplinesPage() {
     color: '#1e40af',
     display_order: 0,
     is_active: true,
-  })
+    tiebreak_method: 'score_x_v',
+  } as any)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   // Stages modal (separate from discipline edit form)
   const [showStagesModal, setShowStagesModal] = useState(false)
@@ -185,7 +186,8 @@ export default function AdminDisciplinesPage() {
       color: discipline.color || '#1e40af',
       display_order: discipline.display_order || 0,
       is_active: discipline.is_active ?? true,
-    })
+      tiebreak_method: (discipline as any).tiebreak_method || 'score_x_v',
+    } as any)
     setEditingId(discipline.id)
     setShowForm(true)
   }
@@ -393,6 +395,20 @@ export default function AdminDisciplinesPage() {
                   <label htmlFor="is_active" className="ml-2 text-sm font-medium text-gray-700">
                     Active
                   </label>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tiebreak Method
+                  </label>
+                  <select
+                    value={(formData as any).tiebreak_method || 'score_x_v'}
+                    onChange={(e) => setFormData({ ...formData, tiebreak_method: e.target.value } as any)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                  >
+                    <option value="score_x_v">Score → X → V (default)</option>
+                    <option value="score_v">Score → V only (SA Open TR / F-class)</option>
+                  </select>
                 </div>
               </div>
 

@@ -130,6 +130,7 @@ export default async function EventDetailPage({
       u25: cd.all_matches_u25_fee,
       maxEntries: cd.max_entries,
     },
+    disciplineStartDate: cd.start_date ?? null,
   })) || []
 
   return (
@@ -203,7 +204,15 @@ export default async function EventDetailPage({
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <h3 className="text-lg font-semibold text-gray-900 mb-2">{discipline.name}</h3>
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-lg font-semibold text-gray-900">{discipline.name}</h3>
+                            {discipline.disciplineStartDate && (
+                              <span className="flex items-center gap-1 text-xs text-gray-500">
+                                <Calendar className="h-3.5 w-3.5" />
+                                Starts {format(new Date(discipline.disciplineStartDate), 'MMM d')}
+                              </span>
+                            )}
+                          </div>
                           {discipline.description && (
                             <div
                               className="text-gray-600 text-sm mb-3 prose prose-sm max-w-none"

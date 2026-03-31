@@ -66,10 +66,9 @@ const calculateTotals = (rounds: RoundScore[], scoringWindow: { start: number; e
   )
   const baseScore = scoringRounds.reduce((sum, round) => sum + round.score, 0)
   const vCount = scoringRounds.filter((round) => round.isV).length
-  const vBonus = vCount * 0.001
 
   return {
-    totalScore: Number((baseScore + vBonus).toFixed(3)),
+    totalScore: baseScore,
     vCount,
   }
 }
@@ -268,7 +267,9 @@ export default function ScoringPage() {
             distance,
             match_date,
             match_stages (
+              id,
               discipline_id,
+              is_open,
               rounds,
               sighters,
               max_score,
@@ -287,7 +288,7 @@ export default function ScoringPage() {
         const scoringStagesList: ScoringStage[] = []
         ;(matches as any[]).forEach(match => {
           ;(match.match_stages || []).forEach((ms: any) => {
-            if (ms.stages) {
+            if (ms.stages && ms.is_open) {
               scoringStagesList.push({
                 ...ms.stages,
                 // Apply per-event overrides — null means use stage default
@@ -674,6 +675,51 @@ export default function ScoringPage() {
     }
   }
 
+  const handleSubmitSimpleScore = async (stageId: string, matchId: string, score: number, vCount: number) => {
+    if (!selectedRegistration) return
+    setSaving(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const existingScore = submittedScores.find(
+        (s: any) => s.registration_id === selectedRegistration && s.stage_id === stageId && s.match_id === matchId
+      )
+
+      const scoreData = {
+        registration_id: selectedRegistration,
+        stage_id: stageId,
+        match_id: matchId,
+        score,
+        x_count: 0,
+        v_count: vCount,
+        is_dnf: false,
+        is_dq: false,
+        notes: null,
+        submitted_by: user.id,
+        submitted_at: new Date().toISOString(),
+      }
+
+      if (existingScore && !existingScore.verified_at) {
+        const { error } = await supabase.from('scores').update(scoreData).eq('id', existingScore.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('scores').insert(scoreData)
+        if (error) {
+          if (error.code === '23505') { toast.error('Score already submitted for this stage'); return }
+          throw error
+        }
+      }
+
+      toast.success('Score submitted')
+      fetchData()
+    } catch (error: any) {
+      toast.error(error.message || 'Error submitting score')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const getStatusBadge = (score: Score) => {
     if (score.verified_at) {
       return (
@@ -718,12 +764,7 @@ export default function ScoringPage() {
         registrations={registrations}
         scoringStages={scoringStages}
         submittedScores={submittedScores}
-        stageScores={stageScores}
-        setStageScores={setStageScores}
-        onScoreUpdate={updateRoundScore}
-        onSighterModeUpdate={updateSighterMode}
-        onSubmitScore={handleSubmit}
-        onFlagUpdate={updateStageFlag}
+        onSubmitSimpleScore={handleSubmitSimpleScore}
         saving={saving}
       />
     )

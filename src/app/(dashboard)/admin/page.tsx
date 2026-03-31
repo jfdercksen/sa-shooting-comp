@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Users, Calendar, CheckCircle, Mail, Plus, FileText, ClipboardList, Download, TrendingUp, Target, Trophy } from 'lucide-react'
+import { Users, Calendar, CheckCircle, Mail, Plus, FileText, ClipboardList, Download, TrendingUp, Target, Trophy, ToggleRight, Layers } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
@@ -236,6 +236,20 @@ export default function AdminDashboardPage() {
             >
               <ClipboardList className="h-5 w-5 text-[#1e40af]" />
               <span className="font-medium text-gray-900">View Registrations</span>
+            </Link>
+            <Link
+              href="/admin/scoring-control"
+              className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:border-[#1e40af] hover:bg-blue-50 transition-colors"
+            >
+              <ToggleRight className="h-5 w-5 text-[#1e40af]" />
+              <span className="font-medium text-gray-900">Scoring Control</span>
+            </Link>
+            <Link
+              href="/admin/aggregates"
+              className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:border-[#1e40af] hover:bg-blue-50 transition-colors"
+            >
+              <Layers className="h-5 w-5 text-[#1e40af]" />
+              <span className="font-medium text-gray-900">Aggregates</span>
             </Link>
             <button
               onClick={() => toast.info('Export feature coming soon')}

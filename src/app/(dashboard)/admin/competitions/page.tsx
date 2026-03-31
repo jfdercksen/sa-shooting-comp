@@ -21,16 +21,22 @@ interface DisciplineFee {
   u19Fee: number
   u25Fee: number
   maxEntries: number
+  teamTopN: number | null
+  startDate: string | null
 }
+
+type MatchType = 'individual' | 'team' | 'aggregate' | 'progressive'
 
 interface DisciplineMatch {
   id: string
   stageId: string | null
   matchDate: string
   entryFee: number
+  matchType: MatchType
   roundsOverride: number | null    // null = use stage default
   sightersOverride: number | null  // null = use stage default
   maxScoreOverride: number | null  // null = use stage default
+  isWarmup: boolean
 }
 
 interface StageFormData {
@@ -184,7 +190,7 @@ export default function AdminCompetitionsPage() {
       setSelectedDisciplines([...selectedDisciplines, disciplineId])
       setDisciplineFees({
         ...disciplineFees,
-        [disciplineId]: { disciplineId, standardFee: 0, u19Fee: 0, u25Fee: 0, maxEntries: 0 },
+        [disciplineId]: { disciplineId, standardFee: 0, u19Fee: 0, u25Fee: 0, maxEntries: 0, teamTopN: null, startDate: null },
       })
       setDisciplineMatches({
         ...disciplineMatches,
@@ -194,7 +200,7 @@ export default function AdminCompetitionsPage() {
     }
   }
 
-  const updateDisciplineFee = (disciplineId: string, field: keyof DisciplineFee, value: number) => {
+  const updateDisciplineFee = (disciplineId: string, field: keyof DisciplineFee, value: number | string | null) => {
     setDisciplineFees({
       ...disciplineFees,
       [disciplineId]: { ...disciplineFees[disciplineId], [field]: value },
@@ -209,9 +215,11 @@ export default function AdminCompetitionsPage() {
       stageId: null,
       matchDate: '',
       entryFee: 0,
+      matchType: 'individual',
       roundsOverride: null,
       sightersOverride: null,
       maxScoreOverride: null,
+      isWarmup: false,
     }
     setDisciplineMatches({
       ...disciplineMatches,
@@ -448,7 +456,9 @@ export default function AdminCompetitionsPage() {
           all_matches_u19_fee: fees.u19Fee || null,
           all_matches_u25_fee: fees.u25Fee || null,
           max_entries: fees.maxEntries || null,
-        }
+          team_top_n: fees.teamTopN || null,
+          start_date: fees.startDate || null,
+        } as any
       })
 
       if (disciplineInserts.length > 0) {
@@ -472,7 +482,9 @@ export default function AdminCompetitionsPage() {
             match_date: match.matchDate || null,
             entry_fee: match.entryFee,
             is_optional: false,
-          }
+            is_warmup: match.isWarmup,
+            match_type: match.matchType,
+          } as any
         })
 
         const { data: savedMatches, error: matchError } = await supabase
@@ -595,6 +607,8 @@ export default function AdminCompetitionsPage() {
             u19Fee: cd.all_matches_u19_fee || 0,
             u25Fee: cd.all_matches_u25_fee || 0,
             maxEntries: cd.max_entries || 0,
+            teamTopN: (cd as any).team_top_n ?? null,
+            startDate: (cd as any).start_date ?? null,
           }
         }
       })
@@ -612,9 +626,11 @@ export default function AdminCompetitionsPage() {
             stageId: ms.stage_id || null,
             matchDate: cm.match_date ? cm.match_date.split('T')[0] : '',
             entryFee: cm.entry_fee,
+            matchType: (cm.match_type as MatchType) || 'individual',
             roundsOverride: ms.rounds ?? null,
             sightersOverride: ms.sighters ?? null,
             maxScoreOverride: ms.max_score ?? null,
+            isWarmup: cm.is_warmup || false,
           })
         }
       })
@@ -977,6 +993,32 @@ export default function AdminCompetitionsPage() {
                                     min="0"
                                   />
                                 </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                                    Team Top N
+                                    <span className="ml-1 font-normal text-gray-400">(blank = all)</span>
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={fees.teamTopN ?? ''}
+                                    onChange={(e) => updateDisciplineFee(disciplineId, 'teamTopN' as any, e.target.value === '' ? null : parseInt(e.target.value) || null)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                    min="1"
+                                    placeholder="e.g. 3"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                                    Discipline Start Date
+                                    <span className="ml-1 font-normal text-gray-400">(blank = event date)</span>
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={fees.startDate ?? ''}
+                                    onChange={(e) => updateDisciplineFee(disciplineId, 'startDate' as any, e.target.value || null)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1e40af] focus:border-transparent"
+                                  />
+                                </div>
                               </div>
                             </div>
 
@@ -1227,6 +1269,19 @@ export default function AdminCompetitionsPage() {
                                           </select>
                                         </div>
                                         <div className="flex-shrink-0">
+                                          <select
+                                            value={match.matchType}
+                                            onChange={(e) => updateDisciplineMatch(disciplineId, match.id, 'matchType', e.target.value as MatchType)}
+                                            className="px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-[#1e40af] focus:border-transparent bg-white"
+                                            title="Match type"
+                                          >
+                                            <option value="individual">Individual</option>
+                                            <option value="team">Team</option>
+                                            <option value="aggregate">Aggregate</option>
+                                            <option value="progressive">Progressive</option>
+                                          </select>
+                                        </div>
+                                        <div className="flex-shrink-0">
                                           <input
                                             type="date"
                                             value={match.matchDate}
@@ -1246,6 +1301,15 @@ export default function AdminCompetitionsPage() {
                                             />
                                           </div>
                                         </div>
+                                        <label className="flex items-center gap-1 flex-shrink-0 cursor-pointer" title="Warm-up matches are excluded from all standings and aggregates">
+                                          <input
+                                            type="checkbox"
+                                            checked={match.isWarmup}
+                                            onChange={(e) => updateDisciplineMatch(disciplineId, match.id, 'isWarmup', e.target.checked)}
+                                            className="rounded border-gray-300 text-amber-500 focus:ring-amber-400"
+                                          />
+                                          <span className="text-xs text-gray-500">Warm-up</span>
+                                        </label>
                                         <button
                                           type="button"
                                           onClick={() => removeMatchFromDiscipline(disciplineId, match.id)}
